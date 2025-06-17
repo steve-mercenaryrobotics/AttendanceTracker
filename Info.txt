@@ -1,0 +1,115 @@
+https://github.com/AbhiK002/virtual-keyboard
+
+https://www.youtube.com/watch?v=8Tlqb14NvY8
+
+https://www.reddit.com/r/Python/comments/x5gjpv/tool_to_easily_develop_tkinter_guis/
+
+
+
+
+
+https://dev.to/dev1721/do-you-wanna-keep-your-embedded-database-encrypted-5egk
+
+ 
+
+https://docs.devart.com/python/sqlite/database-encryption.htm
+
+ 
+
+https://www.reddit.com/r/learnpython/comments/13kviq0/sqlite_database_encryption/?rdt=51416
+
+ 
+
+SQLCipher
+
+https://www.youtube.com/watch?v=8PARZE2aTOQ
+
+ 
+
+SQL
+
+https://www.geeksforgeeks.org/sql-using-python/
+
+https://builtin.com/data-science/how-to-use-sql-python
+
+https://www.freecodecamp.org/news/connect-python-with-sql/
+
+ 
+
+Encrypted log
+
+Google “python encrypt log”
+
+https://stackoverflow.com/questions/44475816/python-logging-module-encrypt
+
+https://stackoverflow.com/questions/14659518/python-log-encryption-with-a-public-key-using-pycrypto
+
+https://positronicsengineer.wordpress.com/home/python-log-encryption/
+
+ 
+
+Graphics
+
+https://wiki.python.org/moin/GuiProgramming
+
+https://www.youtube.com/watch?v=QPHtNqGNuX4
+
+https://www.youtube.com/watch?v=Q72b6tDQMKQ
+
+https://www.youtube.com/watch?v=gY5V7b-uA_c
+
+https://www.pysimplegui.com/ Complex licensing ☹
+
+    TKInter https://coderslegacy.com/python/python-gui/
+        https://www.youtube.com/watch?v=D0J3BP6GukM
+        https://www.youtube.com/watch?v=U-jfICHae3w
+        https://www.youtube.com/watch?v=NVPibVfFVtM
+    https://coderslegacy.com/python-gui-projects-with-tkinter-code/
+
+ 
+
+https://pyglet.org/
+
+https://www.pygame.org/news
+
+https://docs.python.org/3/library/tkinter.html
+
+graphics.py https://mcsp.wartburg.edu/zelle/python/graphics/graphics/index.html
+
+https://anh.cs.luc.edu/handsonPythonTutorial/graphics.html
+
+Pillow
+
+ 
+
+Time synchronization
+
+https://stackoverflow.com/questions/5222951/easy-way-to-get-the-correct-time-in-python
+
+https://forums.raspberrypi.com/viewtopic.php?t=308207
+
+https://forums.raspberrypi.com/viewtopic.php?t=194468
+
+ 
+
+Push to Github
+
+https://stackoverflow.com/questions/63427607/python-upload-files-directly-to-github-using-pygithub
+
+https://stackoverflow.com/questions/50071841/how-to-push-local-files-to-github-using-python-or-post-a-commit-via-python
+
+ 
+
+VSCode Python setup
+
+https://www.youtube.com/watch?v=PwGKhvqJCQM
+
+ 
+
+Regular expression list search
+
+Google “python regular expression list selection”
+
+https://stackoverflow.com/questions/3640359/regular-expressions-search-in-list
+
+ 
