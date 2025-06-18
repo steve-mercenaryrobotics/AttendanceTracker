@@ -19,6 +19,7 @@ from enum import Enum
 import re
 import math
 from datetime import datetime
+import sys
 
 CurrentEvent = "Workshop"
 
@@ -698,8 +699,12 @@ InitComPort()
 #Make sure all directories exist and load the member database dictionary
 InitialSetup()
 
+if (sys.platform == "win32"):
+    screen = pygame.display.set_mode((WindowWidth, WindowHeight), pygame.DOUBLEBUF | pygame.HWSURFACE) 
+else:
+    screen = pygame.display.set_mode((WindowWidth, WindowHeight), pygame.DOUBLEBUF | pygame.HWSURFACE | pygame.FULLSCREEN)  
+
 #screen = pygame.display.set_mode((WindowWidth, WindowHeight), pygame.DOUBLEBUF | pygame.HWSURFACE | pygame.FULLSCREEN) 
-screen = pygame.display.set_mode((WindowWidth, WindowHeight), pygame.DOUBLEBUF | pygame.HWSURFACE) 
 
 font = pygame.font.Font(None, 48)
 NameTextHeight = font.render("A", 1, (0, 0, 0)).get_height()
