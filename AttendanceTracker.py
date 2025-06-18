@@ -98,9 +98,10 @@ def BuildFileList(Path):
     Returns:
         List: List of file names."""
     Files = []
-    for entry in os.scandir(Path):
-        if entry.is_file():
-            Files.append(entry.name)
+    if (os.path.exists(Path)):
+        for entry in os.scandir(Path):
+            if entry.is_file():
+                Files.append(entry.name)
     return Files
 
 def ResizeWindow():
@@ -266,7 +267,11 @@ def GetCurrentUserStatus():
     CurrentUserName = NameTextBoxText
     CurrentUserID = NameToID[CurrentUserName]
     #Open the current user log file and get their status, photo etc
-    CurrentUserPhotoFilename    = "./Members/" + CurrentUserID + "/" + UserPhotoFilename
+    UserPhotos = BuildFileList("./Members/" + CurrentUserID + "/Photos")
+    if (len(UserPhotos) > 0):
+        CurrentUserPhotoFilename = "./Members/" + CurrentUserID + "/Photos/" + random.choice(UserPhotos)
+    else:
+        CurrentUserPhotoFilename = "Splash/" + random.choice(SplashFiles)
     CurrentUserActivityFilename = "./Members/" + CurrentUserID + "/" + UserActivityFilename
 
     if (os.path.exists(CurrentUserActivityFilename)):
