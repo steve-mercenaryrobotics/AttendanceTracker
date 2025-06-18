@@ -494,7 +494,7 @@ def UpdateCurrentUserStatus(Status):
 
     CurrentUserStatus = Status
     UpdateCurrentUserStatusFiles(Status)
-    NameTextBoxText = ""
+    NameTextBoxText = "" 
     NameTextChanged = True
     CheckInOutTimeoutClick = 0
     CheckInOutTimeoutCard = 0
