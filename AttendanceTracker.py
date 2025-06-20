@@ -642,7 +642,7 @@ def InitComPort():
             ComPortDescription = ports[0]
             ComPort = ComPortDescription.device
         else:
-            ComPort = '/dev/serial0/'
+            ComPort = "/dev/serial0/"
         try:
             SerialPort = serial.Serial(ComPort, 115200)
             if (SerialPort.is_open):
