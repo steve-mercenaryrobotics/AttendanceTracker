@@ -638,8 +638,11 @@ def InitComPort():
     print("Available ports = \n", ports)
     if (len(ports) > 0):
         #Use the first com port found
-        ComPortDescription = ports[0]
-        ComPort = ComPortDescription.device
+        if (sys.platform == "win32"):
+            ComPortDescription = ports[0]
+            ComPort = ComPortDescription.device
+        else:
+            ComPort = '/dev/serial0/'
         try:
             SerialPort = serial.Serial(ComPort, 115200)
             if (SerialPort.is_open):
