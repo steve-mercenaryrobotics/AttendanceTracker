@@ -635,6 +635,7 @@ def InitComPort():
     global SerialPortOpened
 
     ports = list(port_list.comports())
+    print("Available ports = \n", ports)
     if (len(ports) > 0):
         #Use the first com port found
         ComPortDescription = ports[0]
@@ -642,7 +643,7 @@ def InitComPort():
         try:
             SerialPort = serial.Serial(ComPort, 115200)
             if (SerialPort.is_open):
-                print("UART with card reader opened correctly")
+                print("UART ", SerialPort.name, " with card reader opened correctly")
                 SerialPortOpened = True
             else:
                 print("UART failed to connect to card reader !!!")
