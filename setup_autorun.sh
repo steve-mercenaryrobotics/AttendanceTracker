@@ -1,3 +1,3 @@
 cd
 mkdir -p .config/autostart
-mv AttendanceTracker/AttendanceTracker.desktop .config/autostart
+cp AttendanceTracker/AttendanceTracker.desktop .config/autostart
