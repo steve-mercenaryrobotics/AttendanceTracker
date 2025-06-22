@@ -1,3 +1,5 @@
 Credentials.json
 *.*~
 *.swp
+*.tmp
+~*.*
