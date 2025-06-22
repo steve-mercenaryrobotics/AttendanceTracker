@@ -1,0 +1,5 @@
+       [Desktop Entry]
+       Name=AttendanceTracker
+       Exec=lxterminal $USER/AttendanceTracker/start.sh
+       Type=Application
+       Terminal=false
