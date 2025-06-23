@@ -322,16 +322,16 @@ module TypeCBlock()
   $fn = 50;
   difference()
   {
-    translate([0, -16, 1])
-      cube([22, 58, 13], center = true);
-    translate([0, 10, 0])
+    translate([0, -21, 1.7])
+      cube([22, 68, 12], center = true);
+    translate([0, 10, 0.5])
       TypeCCable($D = 8.2, $H = 25);
-    translate([0, -20, 0])
+    translate([0, -25, 0.5])
       hull()
       {
-        TypeCCable($D = 10, $H = 45);
+        TypeCCable($D = 12, $H = 55);
         translate([0, 0, -10])
-          cube([15.2, 45, 1], center = true);
+          cube([12 + 4.1, 55, 1], center = true);
       }
   }
 }
@@ -370,11 +370,12 @@ module AttendanceTrackerShellV2()
       //Type C socket
 //      translate([-80, -$HeightV2 / 2, -6])
 //        TypeCCable($D = 10, $H = 25, $fn = 50);
-        translate([-6, -24.5, -15])
-          cube([37, 14.7, 10], center = true);
-        translate([10, -50, -15.2])
-        rotate(90, [1, 0, 0])
-        cylinder(d = 4, h = 50, $fn = 40, center = true);
+        translate([-1, -24.5, -15])
+          cube([47, 16.1, 10], center = true);
+        //Cable trench
+        translate([19.5, -57.5, -15.0])
+          rotate(90, [1, 0, 0])
+            cylinder(d = 6, h = 50, $fn = 40, center = true);
       //Pi 5 PCB ckearance
       translate([92, -60, -7.5])
       cube([60, 10, 2], center = true);
@@ -417,7 +418,7 @@ module AttendanceTrackerShellV2()
     }
   }
   //RFID melt pillars
-  translate([($WidthV2 / 2) + 38 - (37 / 2) - 18, ($HeightV2 / 2) - (35 / 2) - 5, ($ThicknessV2 / 2) - 3.2 - $WallV2])
+  translate([($WidthV2 / 2) + 38 - (37 / 2) - 22, ($HeightV2 / 2) - (35 / 2) - 9, ($ThicknessV2 / 2) - 3.2 - $WallV2])
     RFIDPillars();
 }
 
@@ -439,10 +440,10 @@ module RFIDPillars()
 
 module LowerClip()
 {
-  $H = 23;
+  $H = 22.2;
   $Thickness = 2.5;
   
-  translate([0, $Thickness / 2, -($TotalThicknessV2 - $H) / 2])
+  translate([0, $Thickness / 2, (-($TotalThicknessV2 - $H) / 2) + .8])
   {
     cube([$L, $Thickness, $H], center = true);
     translate([0, -.3, ($H / 2) - 1.83])
@@ -523,5 +524,10 @@ difference()
 //translate([130, -16.7 - 6, -13])
 //  RaspberryPi5();
 
-//LowerShellSegmentV2();
-UpperShellSegmentV2();
+//difference()
+//{
+LowerShellSegmentV2();
+//  translate([-100, -100, -50])
+//  cube([100, 200, 100]);
+//}
+//UpperShellSegmentV2();
