@@ -22,7 +22,8 @@ from datetime import datetime
 import sys
 import socket
 
-ConfigShowTP = True
+ConfigShowTP    = True
+ConfigShowPorts = True
 
 CurrentEvent = "Workshop"
 
@@ -59,7 +60,7 @@ PhotoEffectSpeed = 6
 SplashFiles = []
 
 CursorBlinkState = False
-TextInputActive = False
+TextInputActive = True
 CHECKINOUTCLICK_TIMEOUT = 5 * 2 
 CHECKINOUTCARD_TIMEOUT  = 5 * 2
 CheckInOutTimeoutClick = 0
@@ -69,6 +70,8 @@ TimeoutClickActive = False
 
 SomethingHappened = True
 ComPort = ""
+SerialPort = ""
+SerialPortOpened = ""
 
 MemberDictionary = {}
 NameToID={}
@@ -546,13 +549,14 @@ def ProcessMouseDownSearchCheckinCheckout(event):
     global CheckInOutTimeoutClick
     global TimeoutClickActive
 
-    if NameTextBoxRect.collidepoint(event.pos): 
-        TextInputActive = True
-        CursorBlinkState = True
-        pygame.time.set_timer(CURSOR_BLINK_TIMER_EVENT, 500)                
-    else: 
-        TextInputActive = False
-        CursorBlinkState = False
+#Text always active now so can use keyboard mimic card reader
+#    if NameTextBoxRect.collidepoint(event.pos): 
+#        TextInputActive = True
+#        CursorBlinkState = True
+#        pygame.time.set_timer(CURSOR_BLINK_TIMER_EVENT, 500)                
+#    else: 
+#        TextInputActive = False
+#        CursorBlinkState = False
         
     if NameListRect.collidepoint(event.pos): 
         EntryHit = math.floor((event.pos[1] - NameListRect[1]) / NameTextHeight)
@@ -660,7 +664,11 @@ def InitComPort():
     global SerialPortOpened
 
     ports = list(port_list.comports())
-    print("Available ports = \n", ports)
+    if (ConfigShowPorts):
+        print("Available ports = " )
+        for port in ports:
+            print(port.name)
+
     if (len(ports) > 0):
         #Use the first com port found
         if (sys.platform == "win32"):
@@ -720,6 +728,7 @@ def CheckCard():
                 print("Member for tag", Card, "not found")
 
 ###################################################################################################
+
 pygame.init() 
 clock = pygame.time.Clock()
 InitComPort()
