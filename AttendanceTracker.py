@@ -20,6 +20,9 @@ import re
 import math
 from datetime import datetime
 import sys
+import socket
+
+ConfigShowTP = True
 
 CurrentEvent = "Workshop"
 
@@ -70,6 +73,7 @@ ComPort = ""
 MemberDictionary = {}
 NameToID={}
 
+CurrentIP = "0.0.0.0"
 
 class UserStatus(Enum):
     ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED = range(5)
@@ -91,6 +95,19 @@ class MenuState(Enum):
     ERROR, SEARCH, ADMIN, CHECKINOUT = range(4)
 
 CurrentMenu = MenuState.SEARCH
+
+def get_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.254.254.254', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
 
 def BuildFileList(Path):
     """Build a list of all files in the specified OS path.
@@ -206,6 +223,12 @@ def UpdatePhoto2Display():
         Photo2Display =  pygame.transform.smoothscale(LoadedPhoto, (LoadedPhoto.get_width() * HeightRatio,LoadedPhoto.get_height() * HeightRatio))
     else:
         Photo2Display =  pygame.transform.smoothscale(LoadedPhoto, (LoadedPhoto.get_width() * WidthRatio,LoadedPhoto.get_height() * WidthRatio))
+
+def ShowIP():
+    IPfont = pygame.font.Font(None, 12)
+    txt_surface = IPfont.render(CurrentIP, True, pygame.Color('black'))
+    screen.blit(txt_surface, (3, 3))
+    CurrentIP
 
 def DrawBox(Box, BoxColor, BorderThickness, BorderColor):
     """Render a box.
@@ -368,6 +391,8 @@ def UpdateDisplay():
                 DrawButton(CheckInButton, "Check In", 'lightgray', 'gray')
                 DrawButton(CheckOutButton, "Check Out", 'black', 'gray')
         ShowPhoto()
+        if (ConfigShowTP):
+            ShowIP()
         #pygame.display.update()    
         pygame.display.flip()
         #Clear the buffer ready for the next renderings
@@ -708,7 +733,7 @@ if (sys.platform == "win32"):
 else:
     screen = pygame.display.set_mode((WindowWidth, WindowHeight), pygame.DOUBLEBUF | pygame.HWSURFACE | pygame.FULLSCREEN)  
 
-#screen = pygame.display.set_mode((WindowWidth, WindowHeight), pygame.DOUBLEBUF | pygame.HWSURFACE | pygame.FULLSCREEN) 
+CurrentIP = get_ip()
 
 font = pygame.font.Font(None, 48)
 NameTextHeight = font.render("A", 1, (0, 0, 0)).get_height()
