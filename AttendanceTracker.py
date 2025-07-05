@@ -604,7 +604,7 @@ def FindGoogleIDRow(ID):
         Row = Row + 1
     #If we reach here then a fatal error has occured!!!
     print("Serious Error !!!")
-
+ 
 def UpdateCurrentUserStatusFiles(Status):
     """Update the current user status in the tracking databases.
     Additionally update the Google sheet if the Google connection is active.
@@ -620,7 +620,7 @@ def UpdateCurrentUserStatusFiles(Status):
     m.close()
     if (GoogleConnectionGood):
         #Update the Members Google sheet
-        Row = FindGoogleIDRow(CurrentUserID)
+        Row = FindGoogleIDRow(CurrentUserID) 
         StatusText = GoogleStatusText[Status]
         GoogleSheet.sheet1.update_cell(Row,GOOGLE_INOUT_COL, StatusText)
         #Then update the individual member tracking
