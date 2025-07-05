@@ -630,6 +630,7 @@ def UpdateCurrentUserStatusFiles(Status):
     Parameters:
         Status (UserStatus.): ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED.
     """
+    print("UpdateCurrentUserStatusFiles")
     StatusText = UserStatusText[Status]
     CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     #Append action to file
@@ -654,6 +655,7 @@ def UpdateCurrentUserStatus(Status):
     Parameters:
         Status (UserStatus.): ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED.
     """
+    print("UpdateCurrentUserStatus")
     global CurrentUserStatus
     global NameTextBoxText
     global NameTextChanged
@@ -695,6 +697,7 @@ def ProcessMouseDownSearchCheckinCheckout(event):
 #        TextInputActive = False
 #        CursorBlinkState = False
         
+    print ("ProcessMouseDownSearchCheckinCheckout")
     if NameListRect.collidepoint(event.pos): 
         EntryHit = math.floor((event.pos[1] - NameListRect[1]) / NameTextHeight)
         if (EntryHit < len(FilteredMembersNames)):
@@ -884,8 +887,10 @@ def InitGoogle():
         GoogleSheet = client.open_by_key(ConfigGoogleSheetID)
     except:
         GoogleConnectionGood = False
+        print("Google connection failed")
     else:
         GoogleConnectionGood = True
+        print("Google connected")
 
 def LoadConfig():
     """Load settings from the config.txt file"""
