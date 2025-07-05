@@ -451,6 +451,7 @@ def CheckMembers():
     global NameToID
     global MemberDictionary
     global CurrentUserActivityFilename
+    global CurrentUserID
 
     f = open('Members.txt', "r")
     lines = f.readlines()
@@ -472,6 +473,7 @@ def CheckMembers():
         #Add the member dictionary entry to the global member dictionary
         MemberDictionary[ID] = Member
         NameToID[Name] = ID
+        CurrentUserID = ID
         #Make sure that the member ID database path exists
         MemberPath = "./Members/" + ID
         CurrentUserActivityFilename = MemberPath + "/" + UserActivityFilename
@@ -565,9 +567,22 @@ def InitialSetup():
         #This also builds a list of all members
         CheckMembers()
     else:
-        print("ERROR : No 'Members.txt' file exists.")
-        print("        A Members file must exists with at least one ADMIN member.")
-        exit(-1)
+        if (GoogleConnectionGood):
+            #No local Members file so build from Google retrieved list
+            with open("Members.txt", 'w') as file:
+                for Member in MemberDictionaryGoogle:
+                    Data = Member + "\t" + MemberDictionaryGoogle[Member]["Name"] + "\t" + MemberDictionaryGoogle[Member]["Type"] + "\t" + MemberDictionaryGoogle[Member]["InOut"] + "\t" + MemberDictionaryGoogle[Member]["Status"] + "\n"
+                    file.write(Data)
+            file.close()
+            #Now go ahead and create all the directories and files
+            CheckAndMakePath("./Members")
+            #Now cycle through all members and make sure they have a directory
+            #This also builds a list of all members
+            CheckMembers()                
+        else:
+            print("ERROR : No 'Members.txt' file exists.")
+            print("        A Members file must exists with at least one ADMIN member.")
+            exit(-1)
 
     pygame.time.set_timer(INTERVAL_TIMER_EVENT, 500)                
 
@@ -599,6 +614,7 @@ def FindGoogleIDRow(ID):
     """
     Row = 3
     print ("Looking for ", ID)
+    print()
     for Member in MemberDictionaryGoogle:
         print(Member)
         if (ID == Member):
