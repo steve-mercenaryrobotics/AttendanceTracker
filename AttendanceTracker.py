@@ -644,6 +644,8 @@ def UpdateCurrentUserStatusFiles(Status):
         GoogleSheet.sheet1.update_cell(Row,GOOGLE_INOUT_COL, StatusText)
         #Then update the individual member tracking
         #ToDo : 
+    else:
+        print("Google connection not good")
 
 def UpdateCurrentUserStatus(Status):
     """Update the current user status to the new status.
