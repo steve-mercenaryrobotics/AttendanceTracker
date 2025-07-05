@@ -640,6 +640,7 @@ def UpdateCurrentUserStatusFiles(Status):
         #Update the Members Google sheet
         Row = FindGoogleIDRow(CurrentUserID) 
         StatusText = GoogleStatusText[Status]
+        print ("Updating Google Sheets row ", Row, " column ", GOOGLE_INOUT_COL, " = ", StatusText)
         GoogleSheet.sheet1.update_cell(Row,GOOGLE_INOUT_COL, StatusText)
         #Then update the individual member tracking
         #ToDo : 
