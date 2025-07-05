@@ -73,8 +73,8 @@ SplashFiles = []
 
 CursorBlinkState = False
 TextInputActive = True
-CHECKINOUTCLICK_TIMEOUT = 50 * 2 
-CHECKINOUTCARD_TIMEOUT  = 50 * 2
+CHECKINOUTCLICK_TIMEOUT = 5 * 2 
+CHECKINOUTCARD_TIMEOUT  = 5 * 2
 CheckInOutTimeoutClick = 0
 CheckInOutTimeoutCard = 0
 TimeoutCardActive = False
@@ -678,6 +678,7 @@ def ProcessMouseDownSearchCheckinCheckout(event):
     global NameTextBoxText
     global NameTextChanged
     global CheckInOutTimeoutClick
+    global CheckInOutTimeoutCard
     global TimeoutClickActive
 
 #Text always active now so can use keyboard mimic card reader
