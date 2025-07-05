@@ -79,6 +79,8 @@ CheckInOutTimeoutClick = 0
 CheckInOutTimeoutCard = 0
 TimeoutCardActive = False
 TimeoutClickActive = False
+TimeoutClickClear = False
+TimeoutCardClear = False
 
 SomethingHappened = True
 ComPort = ""
@@ -396,19 +398,23 @@ def UpdateDisplay():
     global TimeoutClickActive
     global TimeoutCardActive
     global CurrentUserStatus
+    global TimeoutClickClear
+    global TimeoutCardClear
 
     Index = 0
     
     if (CurrentMenu == MenuState.CHECKINOUT):
-        if ((CheckInOutTimeoutClick == 0) and (TimeoutClickActive == True)): #Current user was clicked and has timed out so clear the text and revert
+        if (((CheckInOutTimeoutClick == 0) and TimeoutClickActive) or TimeoutClickClear): #Current user was clicked and has timed out so clear the text and revert
             CurrentMenu = MenuState.SEARCH
             NameTextBoxText = ""
             NameTextChanged = True
             SomethingHappened = True
             TimeoutClickActive = False
+            TimeoutClickClear = False
+            CheckInOutTimeoutClick = 0
             SetWaitingPhoto()
 
-        if ((CheckInOutTimeoutCard == 0) and (TimeoutCardActive == True)): #Current user used card and has timed out so check them in/out and clear the text and revert
+        if (((CheckInOutTimeoutCard == 0) and TimeoutCardActive == True) or TimeoutCardClear): #Current user used card and has timed out so check them in/out and clear the text and revert
             if (CurrentUserStatus == UserStatus.CHECKEDOUT):
                 UpdateCurrentUserStatus(UserStatus.CHECKEDIN)
             elif (CurrentUserStatus == UserStatus.CHECKEDIN):
@@ -418,6 +424,8 @@ def UpdateDisplay():
             NameTextChanged = True
             SomethingHappened = True
             TimeoutCardActive == False
+            TimeoutCardClear = False
+            CheckInOutTimeoutCard = 0
             SetWaitingPhoto()
         
     if ((SomethingHappened == True) or (PhotoState != 0)):
@@ -681,6 +689,8 @@ def ProcessMouseDownSearchCheckinCheckout(event):
     global CheckInOutTimeoutCard
     global TimeoutClickActive
     global TimeoutCardActive
+    global TimeoutClickClear
+    global TimeoutCardClear
 
 #Text always active now so can use keyboard mimic card reader
 #    if NameTextBoxRect.collidepoint(event.pos): 
@@ -700,11 +710,11 @@ def ProcessMouseDownSearchCheckinCheckout(event):
             TimeoutClickActive =True
         else:
             #Clicked in empty region below names
-            #Clear the timeout if so
-            CheckInOutTimeoutClick = 0
-            TimeoutClickActive = False
-            CheckInOutTimeoutCard = 0
-            TimeoutCardActive = False
+            #Clear the timeout if so and reset the display
+            if (TimeoutClickActive):
+                TimeoutClickClear = True
+            if (TimeoutCardActive):
+                TimeoutCardClear = True
     elif ((CurrentUserStatus == UserStatus.CHECKEDOUT) and (CheckInRect.collidepoint(event.pos))):
         UpdateCurrentUserStatus(UserStatus.CHECKEDIN)
         SetWaitingPhoto()
@@ -713,10 +723,10 @@ def ProcessMouseDownSearchCheckinCheckout(event):
         SetWaitingPhoto()
     else:
         #Clicked somewhere else other than a button or the list
-        CheckInOutTimeoutClick = 0
-        TimeoutClickActive = False
-        CheckInOutTimeoutCard = 0
-        TimeoutCardActive = False
+        if (TimeoutClickActive):
+            TimeoutClickClear = True
+        if (TimeoutCardActive):
+            TimeoutCardClear = True
 
 def SetWaitingPhoto():
     PhotoFilename = "Splash/" + random.choice(SplashFiles)
