@@ -597,6 +597,7 @@ def ProcessNameClick(Name):
     global CurrentMenu
     global PhotoState
 
+    print ("ProcessNameClick")
     NameTextBoxText = Name
     NameTextChanged = True
     CurrentMenu = MenuState.CHECKINOUT
@@ -838,6 +839,8 @@ def TriggerNameUpdate(Name):
     global NameTextBoxText
     global NameTextChanged
     global SomethingHappened
+
+    print ("TriggerNameUpdate")
     
     SomethingHappened = True
     ProcessNameClick(Name)
