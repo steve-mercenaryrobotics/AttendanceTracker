@@ -6,6 +6,10 @@
 #Ensure 
 # pip install pygame
 # pip install pyserial
+# pip install google-api-python-client
+# pip install google-auth-httplib2
+# pip install google-auth-oauthlib
+# pip install gspread
 
 #ToDo : 
 # Case where name is a sub-name of another e.g. Jim & Jimmy
@@ -18,12 +22,20 @@ import os
 from enum import Enum
 import re
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import socket
+import gspread
+from google.oauth2.service_account import Credentials
 
-ConfigShowTP    = True
+ConfigShowIP    = True
 ConfigShowPorts = True
+ConfigUseGoogle = True
+ConfigGoogleSheetID   = ""
+ConfigGoogleMemberUpdateTime = 20
+
+GoogleSheet=""
+GOOGLE_INOUT_COL = 4
 
 CurrentEvent = "Workshop"
 
@@ -74,9 +86,13 @@ SerialPort = ""
 SerialPortOpened = ""
 
 MemberDictionary = {}
+MemberDictionaryGoogle = {}
 NameToID={}
+NameToIDGoogle={}
 
 CurrentIP = "0.0.0.0"
+GoogleConnectionGood = False
+GoogleMemberLastUpdatesAt = datetime.now() - timedelta(days=1000)
 
 class UserStatus(Enum):
     ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED = range(5)
@@ -89,7 +105,17 @@ UserStatusText = {
     UserStatus.DISABLED : "DISABLED"
 }
 
+GoogleStatusText = {
+    UserStatus.ERROR : "ERROR",
+    UserStatus.CREATED : "Out",
+    UserStatus.CHECKEDIN : "In",
+    UserStatus.CHECKEDOUT : "Out",
+    UserStatus.DISABLED : "DISABLED"
+}
+
 CurrentUserStatus = UserStatus.CHECKEDOUT
+CurrentUserID = ""
+CurrentUserName = ""
 
 CURSOR_BLINK_TIMER_EVENT = pygame.USEREVENT + 1
 INTERVAL_TIMER_EVENT = pygame.USEREVENT + 2
@@ -285,11 +311,13 @@ def DrawTextInputBox(Bounds, Text, TextColor, BackgroundColor, BorderColor, Bord
     screen.blit(txt_surface, (Bounds[0] + 5, Bounds[1] + 5))
 
 def GetCurrentUserStatus():
-    """Get the current user's information and status from their local database file"""
+    """Get the current user's information and status from the latest Google member update or their local database file if offline"""
     last_line = ""
     global CurrentUserPhotoFilename
     global CurrentUserActivityFilename
     global CurrentUserStatus
+    global CurrentUserID
+    global CurrentUserName
     
     CurrentUserName = NameTextBoxText
     CurrentUserID = NameToID[CurrentUserName]
@@ -301,7 +329,21 @@ def GetCurrentUserStatus():
         CurrentUserPhotoFilename = "Splash/" + random.choice(SplashFiles)
     CurrentUserActivityFilename = "./Members/" + CurrentUserID + "/" + UserActivityFilename
 
-    if (os.path.exists(CurrentUserActivityFilename)):
+    if (GoogleConnectionGood):
+        GoogleReadMembers()
+        CurrentMember = MemberDictionaryGoogle[CurrentUserID]
+        TimeStamp = ""
+        Location = ""
+        if (CurrentMember["InOut"] == "In"):
+            Action = "CHECKEDIN"
+            Error = False
+        elif (CurrentMember["InOut"] == "Out"):
+            Action = "CHECKEDOUT"
+            Error = False
+        else:
+            Action = "ERROR"
+            Error = True
+    elif (os.path.exists(CurrentUserActivityFilename)):
         with open(CurrentUserActivityFilename, 'r') as f:
             last_line = f.readlines()[-1]
         #Now extract the date/time, location and last action
@@ -321,6 +363,7 @@ def GetCurrentUserStatus():
         Action = ""
         Location = ""
         Error = True
+    
     if ((not Error)):
         if ((Action == "CHECKEDOUT") or (Action == "CREATED")):
             CurrentUserStatus = UserStatus.CHECKEDOUT
@@ -394,7 +437,7 @@ def UpdateDisplay():
                 DrawButton(CheckInButton, "Check In", 'lightgray', 'gray')
                 DrawButton(CheckOutButton, "Check Out", 'black', 'gray')
         ShowPhoto()
-        if (ConfigShowTP):
+        if (ConfigShowIP):
             ShowIP()
         #pygame.display.update()    
         pygame.display.flip()
@@ -412,14 +455,19 @@ def CheckMembers():
     f = open('Members.txt', "r")
     lines = f.readlines()
     for line in lines:
+        line = line.rstrip()
         fields = line.split("\t")
         ID = fields[0]
         Name = fields[1]
         Type = fields[2]
+        InOut = fields[3]
+        Status = fields[4]
         #Build a dictionary for the member details
         Member =	{
             "Name": Name,
-            "Type": Type
+            "Type": Type,
+            "InOut": InOut,
+            "Status": Status
         }
         #Add the member dictionary entry to the global member dictionary
         MemberDictionary[ID] = Member
@@ -429,10 +477,15 @@ def CheckMembers():
         CurrentUserActivityFilename = MemberPath + "/" + UserActivityFilename
         CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         if (not os.path.exists(MemberPath)):
-            #Directort does not exists so create both directory and new log file
+            #Directory does not exists so create both directory and new log file
             os.mkdir(MemberPath)	
         if (not os.path.exists(CurrentUserActivityFilename)):
             UpdateCurrentUserStatusFiles(UserStatus.CREATED)
+    if (GoogleConnectionGood):
+        if (MemberDictionaryGoogle == MemberDictionary):
+            print("Lists are the same")
+        else:
+            print("Lists are NOT the same")
 
 
 def CheckAndMakePath(Path):
@@ -462,8 +515,48 @@ def FilterDictionary(SearhFor):
     FilteredMembers =  FilteredDictionary
     FilteredMembersNames.sort(key=str.lower)
     
+def GoogleReadMembers():
+    """"
+    Load the list of members from Google Sheets
+    Only do this though if a good Google connection exists and it is longer than the refresh period since last updated
+    This should be safe unless a user goes from one entry pad to another quicker than this period
+    """
+    global GoogleSheet
+    global MemberDictionaryGoogle
+    global NameToIDGoogle
+    global GoogleMemberLastUpdatesAt
+
+    if (GoogleConnectionGood) and ((datetime.now() - GoogleMemberLastUpdatesAt) > timedelta(seconds=ConfigGoogleMemberUpdateTime)):
+        MemberCount = int(GoogleSheet.sheet1.acell('B1').value)
+        MemberData = GoogleSheet.sheet1.get_all_values()[2:MemberCount + 3]
+        GoogleMemberLastUpdatesAt = datetime.now()
+        MemberDictionaryGoogle.clear()
+        NameToIDGoogle.clear()
+        for Info in MemberData:
+            #Build a dictionary for the member details
+            ID = Info[0]
+            Name = Info[1]
+            Type = Info[2]
+            InOut = Info[3]
+            Status = Info[4]
+            Member =	{
+                "Name": Name,
+                "Type": Type,
+                "InOut": InOut,
+                "Status": Status
+            }
+            #Add the member dictionary entry to the global member dictionary
+            MemberDictionaryGoogle[ID] = Member
+            NameToIDGoogle[Name] = ID
+
+
 def InitialSetup():
-    """Perform initial launch setup, including checking all local databases exist"""
+    """
+    Perform initial launch setup, including checking all local databases exist
+    If a Google connection is good then the member list and status is read from Google
+    This is then compared with the local list but for the moment nothing is done if different
+    """
+    GoogleReadMembers()
 	#See if there is a list of members
     if (os.path.exists("Members.txt")):
 		#Yes, so make sure all necessary folders also exist
@@ -499,8 +592,23 @@ def ProcessNameClick(Name):
     else:
         SetWaitingPhoto()
 
+def FindGoogleIDRow(ID):
+    """
+    Find the corresponding Google Sheet row number for the specified used ID
+    The result is the ACTUAL Google sheet row, not the offset 0 indexed row
+    """
+    Row = 3
+    for Member in MemberDictionaryGoogle:
+        if (ID == Member):
+            return Row
+        Row = Row + 1
+    #If we reach here then a fatal error has occured!!!
+    print("Serious Error !!!")
+ 
 def UpdateCurrentUserStatusFiles(Status):
     """Update the current user status in the tracking databases.
+    Additionally update the Google sheet if the Google connection is active.
+    ToDo : If Google is NOT active then we need to log the necessary updates.
     Parameters:
         Status (UserStatus.): ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED.
     """
@@ -510,6 +618,13 @@ def UpdateCurrentUserStatusFiles(Status):
     m = open(CurrentUserActivityFilename, "a")
     m.write(CurrentDataTime + "," + CurrentEvent + "," + StatusText + "\n")
     m.close()
+    if (GoogleConnectionGood):
+        #Update the Members Google sheet
+        Row = FindGoogleIDRow(CurrentUserID) 
+        StatusText = GoogleStatusText[Status]
+        GoogleSheet.sheet1.update_cell(Row,GOOGLE_INOUT_COL, StatusText)
+        #Then update the individual member tracking
+        #ToDo : 
 
 def UpdateCurrentUserStatus(Status):
     """Update the current user status to the new status.
@@ -528,6 +643,7 @@ def UpdateCurrentUserStatus(Status):
 
     CurrentUserStatus = Status
     UpdateCurrentUserStatusFiles(Status)
+    MemberDictionaryGoogle[CurrentUserID]["InOut"] = GoogleStatusText[Status]
     NameTextBoxText = "" 
     NameTextChanged = True
     CheckInOutTimeoutClick = 0
@@ -643,8 +759,6 @@ def ProcessGeneralEvents(event):
     elif event.type == INTERVAL_TIMER_EVENT: 
         ProcessIntervalTimerEvent()
 
-INTERVAL_TIMER_EVENT        
-
 def ProcessEvents():
     """Check if any events are scheduled. 
     If yes, note that something has happened.
@@ -711,6 +825,7 @@ def CheckCard():
     global CheckInOutTimeoutCard
     global TimeoutCardActive
 
+    #If a serial port was opened then probably a serial port connected reader present (certainy in custom RaspPi, not necissarily on Windows)
     if (SerialPortOpened == True):
         CharctersInBuffer = SerialPort.in_waiting
         if (CharctersInBuffer > 16):
@@ -727,12 +842,55 @@ def CheckCard():
             else:
                 print("Member for tag", Card, "not found")
 
+def CheckInternetActive(url="http://www.google.com", timeout=5):
+    """
+    Checks for internet connectivity by attempting to make an HTTP request to a URL.
+    """
+    try:
+        requests.get(url, timeout=timeout)
+        return True
+    except (requests.ConnectionError, requests.Timeout):
+        return False
+
+def InitGoogle():
+    global GoogleConnectionGood
+    global GoogleSheet
+    """Try to open a connection with the Google workbook"""
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_file("Credentials.json", scopes=scopes)
+    client = gspread.authorize(creds)
+    try:
+        GoogleSheet = client.open_by_key(ConfigGoogleSheetID)
+    except:
+        GoogleConnectionGood = False
+    else:
+        GoogleConnectionGood = True
+
+def LoadConfig():
+    """Load settings from the config.txt file"""
+    global ConfigShowIP
+    global ConfigShowPorts
+    global ConfigUseGoogle
+    global ConfigGoogleSheetID
+    global ConfigGoogleMemberUpdateTime
+
+    ConfigShowIP                 = True # Show network IP address in top left
+    ConfigShowPorts              = True # List com ports available to terminal
+    ConfigUseGoogle              = True #Talk to Google Sheets if possible
+    ConfigGoogleMemberUpdateTime = 60*60*24   #Minimum time between member list updates (daily since only one pad at the moment)
+    ConfigGoogleSheetID          = "11ORvP8H8YU0XcTJ798n_mOx_Up1-i4hQyVXFD0EeOws" #Test workbook
+#    ConfigGoogleSheetID = "12mWa63-2ru-o60eQbMBL9WbbAsfEqvWSVEQrGj7w20s" #Main workbook
+    
+
 ###################################################################################################
 
 pygame.init() 
 clock = pygame.time.Clock()
+LoadConfig()
 InitComPort()
-#s = serial.Serial('COM13')
+
+if (ConfigUseGoogle):
+    InitGoogle()
 
 #Make sure all directories exist and load the member database dictionary
 InitialSetup()
