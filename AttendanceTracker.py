@@ -680,6 +680,7 @@ def ProcessMouseDownSearchCheckinCheckout(event):
     global CheckInOutTimeoutClick
     global CheckInOutTimeoutCard
     global TimeoutClickActive
+    global TimeoutCardActive
 
 #Text always active now so can use keyboard mimic card reader
 #    if NameTextBoxRect.collidepoint(event.pos): 
@@ -701,7 +702,9 @@ def ProcessMouseDownSearchCheckinCheckout(event):
             #Clicked in empty region below names
             #Clear the timeout if so
             CheckInOutTimeoutClick = 0
+            TimeoutClickActive = False
             CheckInOutTimeoutCard = 0
+            TimeoutCardActive = False
     elif ((CurrentUserStatus == UserStatus.CHECKEDOUT) and (CheckInRect.collidepoint(event.pos))):
         UpdateCurrentUserStatus(UserStatus.CHECKEDIN)
         SetWaitingPhoto()
@@ -711,7 +714,9 @@ def ProcessMouseDownSearchCheckinCheckout(event):
     else:
         #Clicked somewhere else other than a button or the list
         CheckInOutTimeoutClick = 0
+        TimeoutClickActive = False
         CheckInOutTimeoutCard = 0
+        TimeoutCardActive = False
 
 def SetWaitingPhoto():
     PhotoFilename = "Splash/" + random.choice(SplashFiles)
