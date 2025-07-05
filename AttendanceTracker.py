@@ -6,10 +6,10 @@
 #Ensure 
 # pip install pygame
 # pip install pyserial
-# pip install google-api-python-client
-# pip install google-auth-httplib2
-# pip install google-auth-oauthlib
-# pip install gspread
+# pip install google-api-python-client --break-system-packages
+# pip install google-auth-httplib2 --break-system-packages
+# pip install google-auth-oauthlib --break-system-packages
+# pip install gspread --break-system-packages
 
 #ToDo : 
 # Case where name is a sub-name of another e.g. Jim & Jimmy
@@ -598,7 +598,9 @@ def FindGoogleIDRow(ID):
     The result is the ACTUAL Google sheet row, not the offset 0 indexed row
     """
     Row = 3
+    print ("Looking for ", ID)
     for Member in MemberDictionaryGoogle:
+        print(Member)
         if (ID == Member):
             return Row
         Row = Row + 1
