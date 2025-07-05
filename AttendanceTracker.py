@@ -415,10 +415,11 @@ def UpdateDisplay():
             SetWaitingPhoto()
 
         if (((CheckInOutTimeoutCard == 0) and TimeoutCardActive == True) or TimeoutCardClear): #Current user used card and has timed out so check them in/out and clear the text and revert
-            if (CurrentUserStatus == UserStatus.CHECKEDOUT):
-                UpdateCurrentUserStatus(UserStatus.CHECKEDIN)
-            elif (CurrentUserStatus == UserStatus.CHECKEDIN):
-                UpdateCurrentUserStatus(UserStatus.CHECKEDOUT)
+            if (not TimeoutCardClear):
+                if (CurrentUserStatus == UserStatus.CHECKEDOUT):
+                    UpdateCurrentUserStatus(UserStatus.CHECKEDIN)
+                elif (CurrentUserStatus == UserStatus.CHECKEDIN):
+                    UpdateCurrentUserStatus(UserStatus.CHECKEDOUT)
             CurrentMenu = MenuState.SEARCH
             NameTextBoxText = ""
             NameTextChanged = True
