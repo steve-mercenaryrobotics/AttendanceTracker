@@ -1,6 +1,4 @@
-Credentials*.json
 Credentials.json
-Credentials-test.json
 *.*~
 *.swp
 *.tmp
