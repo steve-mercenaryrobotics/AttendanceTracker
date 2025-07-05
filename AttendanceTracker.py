@@ -73,8 +73,8 @@ SplashFiles = []
 
 CursorBlinkState = False
 TextInputActive = True
-CHECKINOUTCLICK_TIMEOUT = 5 * 2 
-CHECKINOUTCARD_TIMEOUT  = 5 * 2
+CHECKINOUTCLICK_TIMEOUT = 50 * 2 
+CHECKINOUTCARD_TIMEOUT  = 50 * 2
 CheckInOutTimeoutClick = 0
 CheckInOutTimeoutCard = 0
 TimeoutCardActive = False
@@ -597,7 +597,6 @@ def ProcessNameClick(Name):
     global CurrentMenu
     global PhotoState
 
-    print ("ProcessNameClick")
     NameTextBoxText = Name
     NameTextChanged = True
     CurrentMenu = MenuState.CHECKINOUT
@@ -614,10 +613,7 @@ def FindGoogleIDRow(ID):
     The result is the ACTUAL Google sheet row, not the offset 0 indexed row
     """
     Row = 3
-    print ("Looking for ", ID)
-    print()
     for Member in MemberDictionaryGoogle:
-        print(Member)
         if (ID == Member):
             return Row
         Row = Row + 1
@@ -631,7 +627,6 @@ def UpdateCurrentUserStatusFiles(Status):
     Parameters:
         Status (UserStatus.): ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED.
     """
-    print("UpdateCurrentUserStatusFiles")
     StatusText = UserStatusText[Status]
     CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     #Append action to file
@@ -642,12 +637,9 @@ def UpdateCurrentUserStatusFiles(Status):
         #Update the Members Google sheet
         Row = FindGoogleIDRow(CurrentUserID) 
         StatusText = GoogleStatusText[Status]
-        print ("Updating Google Sheets row ", Row, " column ", GOOGLE_INOUT_COL, " = ", StatusText)
         GoogleSheet.sheet1.update_cell(Row,GOOGLE_INOUT_COL, StatusText)
         #Then update the individual member tracking
         #ToDo : 
-    else:
-        print("Google connection not good")
 
 def UpdateCurrentUserStatus(Status):
     """Update the current user status to the new status.
@@ -656,7 +648,6 @@ def UpdateCurrentUserStatus(Status):
     Parameters:
         Status (UserStatus.): ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED.
     """
-    print("UpdateCurrentUserStatus")
     global CurrentUserStatus
     global NameTextBoxText
     global NameTextChanged
@@ -698,7 +689,6 @@ def ProcessMouseDownSearchCheckinCheckout(event):
 #        TextInputActive = False
 #        CursorBlinkState = False
         
-    print ("ProcessMouseDownSearchCheckinCheckout")
     if NameListRect.collidepoint(event.pos): 
         EntryHit = math.floor((event.pos[1] - NameListRect[1]) / NameTextHeight)
         if (EntryHit < len(FilteredMembersNames)):
@@ -706,12 +696,21 @@ def ProcessMouseDownSearchCheckinCheckout(event):
             ProcessNameClick(FilteredMembersNames[EntryHit])
             CheckInOutTimeoutClick = CHECKINOUTCLICK_TIMEOUT
             TimeoutClickActive =True
+        else:
+            #Clicked in empty region below names
+            #Clear the timeout if so
+            CheckInOutTimeoutClick = 0
+            CheckInOutTimeoutCard = 0
     elif ((CurrentUserStatus == UserStatus.CHECKEDOUT) and (CheckInRect.collidepoint(event.pos))):
         UpdateCurrentUserStatus(UserStatus.CHECKEDIN)
         SetWaitingPhoto()
     elif ((CurrentUserStatus == UserStatus.CHECKEDIN) and (CheckOutRect.collidepoint(event.pos))):
         UpdateCurrentUserStatus(UserStatus.CHECKEDOUT)
         SetWaitingPhoto()
+    else:
+        #Clicked somewhere else other than a button or the list
+        CheckInOutTimeoutClick = 0
+        CheckInOutTimeoutCard = 0
 
 def SetWaitingPhoto():
     PhotoFilename = "Splash/" + random.choice(SplashFiles)
