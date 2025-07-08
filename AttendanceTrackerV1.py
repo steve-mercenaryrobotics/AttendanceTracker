@@ -13,7 +13,6 @@
 
 #ToDo : 
 # Case where name is a sub-name of another e.g. Jim & Jimmy
-# If using Google and the connection is lost then revert to local gracefully
 
 import pygame 
 import random
@@ -28,27 +27,15 @@ import sys
 import socket
 import gspread
 from google.oauth2.service_account import Credentials
-import time
 
 ConfigShowIP    = True
 ConfigShowPorts = True
-ConfigDefaultPadLocation = "Workshop"
-CurrentPadLocation = "Workshop"
 ConfigUseGoogle = True
 ConfigGoogleSheetID   = ""
-ConfigGoogleAutoCreateLog = True
 ConfigGoogleMemberUpdateTime = 20
-CurrentLoggingSheetName = "Logging"
 
-GOOGLE_ID_COL     = 1
-GOOGLE_NAME_COL   = 2
-GOOGLE_TYPE_COL   = 3
-GOOGLE_INOUT_COL  = 4
-GOOGLE_STATUS_COL = 5
-
-DATABASE_LOCAL  = 0
-DATABASE_GOOGLE = 1
-DatabaseLocation = DATABASE_LOCAL
+GoogleSheet=""
+GOOGLE_INOUT_COL = 4
 
 CurrentEvent = "Workshop"
 
@@ -95,21 +82,18 @@ TimeoutClickActive = False
 TimeoutClickClear = False
 TimeoutCardClear = False
 
-DisplayNeedUpdated = True
+SomethingHappened = True
 ComPort = ""
 SerialPort = ""
 SerialPortOpened = ""
 
 MemberDictionary = {}
-MemberDictionaryLocal = {}
 MemberDictionaryGoogle = {}
 NameToID={}
-NameToIDLocal={}
 NameToIDGoogle={}
 
 CurrentIP = "0.0.0.0"
 GoogleConnectionGood = False
-GoogleMemberCount = 0
 GoogleMemberLastUpdatesAt = datetime.now() - timedelta(days=1000)
 
 class UserStatus(Enum):
@@ -338,7 +322,7 @@ def GetCurrentUserStatus():
     global CurrentUserName
     
     CurrentUserName = NameTextBoxText
-    CurrentUserID = NameToIDLocal[CurrentUserName]
+    CurrentUserID = NameToID[CurrentUserName]
     #Open the current user log file and get their status, photo etc
     UserPhotos = BuildFileList("./Members/" + CurrentUserID + "/Photos")
     if (len(UserPhotos) > 0):
@@ -400,12 +384,55 @@ def DisplaySearchScreen(Names):
     DrawListBox(NameListRect, Names, ListTextColor)
 
 def UpdateDisplay():
-    """
-    Update the display window based on the current menu state.
-    Only do this though is something happened requiring a display update
-    """
-    if (DisplayNeedUpdated):
-        #Depending on what the current dislpay state is...
+    """Update the display window based on the current menu state.
+    If on the check in/out menu then check if a timeout has occured.
+    If yes then clear the name text. If typed/clicked timeout then
+    cancel the checkin/out. If the member was checked from their 
+    card/tag then default to checking in/out as appropriate."""
+    global NameTextChanged
+    global CurrentMenu
+    global NameTextBoxText
+    global SomethingHappened
+    global CheckInOutTimeoutCard
+    global CheckInOutTimeoutClick
+    global TimeoutClickActive
+    global TimeoutCardActive
+    global CurrentUserStatus
+    global TimeoutClickClear
+    global TimeoutCardClear
+
+    if (CurrentMenu == MenuState.CHECKINOUT):
+        if (((CheckInOutTimeoutClick == 0) and TimeoutClickActive) or TimeoutClickClear): #Current user was clicked and has timed out so clear the text and revert
+            CurrentMenu = MenuState.SEARCH
+            NameTextBoxText = ""
+            NameTextChanged = True
+            SomethingHappened = True
+            TimeoutClickActive = False
+            TimeoutClickClear = False
+            CheckInOutTimeoutClick = 0
+            SetWaitingPhoto()
+
+        if (((CheckInOutTimeoutCard == 0) and TimeoutCardActive == True) or TimeoutCardClear): #Current user used card and has timed out so check them in/out and clear the text and revert
+            if (not TimeoutCardClear):
+                if (CurrentUserStatus == UserStatus.CHECKEDOUT):
+                    UpdateCurrentUserStatus(UserStatus.CHECKEDIN)
+                elif (CurrentUserStatus == UserStatus.CHECKEDIN):
+                    UpdateCurrentUserStatus(UserStatus.CHECKEDOUT)
+            CurrentMenu = MenuState.SEARCH
+            NameTextBoxText = ""
+            NameTextChanged = True
+            SomethingHappened = True
+            TimeoutCardActive == False
+            TimeoutCardClear = False
+            CheckInOutTimeoutCard = 0
+            SetWaitingPhoto()
+        
+    if ((SomethingHappened == True) or (PhotoState != 0)):
+        if (NameTextChanged):
+            FilterDictionary(NameTextBoxText)
+            NameTextChanged = False
+            if (len(FilteredMembersNames) > 1):
+                CurrentMenu = MenuState.SEARCH
         if (CurrentMenu == MenuState.SEARCH):
             DisplaySearchScreen(FilteredMembersNames)
         elif (CurrentMenu == MenuState.CHECKINOUT):
@@ -416,7 +443,6 @@ def UpdateDisplay():
             elif (CurrentUserStatus == UserStatus.CHECKEDIN):
                 DrawButton(CheckInButton, "Check In", 'lightgray', 'gray')
                 DrawButton(CheckOutButton, "Check Out", 'black', 'gray')
-        #Always show a picture
         ShowPhoto()
         if (ConfigShowIP):
             ShowIP()
@@ -425,56 +451,50 @@ def UpdateDisplay():
         #Clear the buffer ready for the next renderings
         screen.fill(BackgroundColor) 
 
-def ConsolidateMemberLists():
-    """
-    Merge the 2 lists if possible.
-    Needs to consider whether the Google connection is good etc...
-    ToDo : Lots needs to be done here !!!
-    """
-
-def CheckMemberLists():
-    """
-    Scan the Google and Local lists and make sure they match. 
-    If not, consolidate them.
-    NOTE: FOR THE MOMENT NO CONSOLIDATION IS APPLIED. GOOGLE IS CONSIDERED AUTHORITIVE
-    Then make sure all member directories exists and consolidate with Google Sheets if active
-    If a member directory does not exist then create it and associated database file and ensure Google matches.
-    ToDo : Actually consolidate. At the end make sure the Google list and local lists match if possible. Depends on connection status etc...
-    """
-    global MemberDictionary
+def CheckMembers():
+    """Check that a members list exists and that all the associated member
+    directories also exist. 
+    If a member directory does not exist then create it and associated database file."""
     global NameToID
-    global DatabaseLocation
+    global MemberDictionary
+    global CurrentUserActivityFilename
+    global CurrentUserID
 
-    if (MemberDictionaryGoogle == MemberDictionaryLocal):
-        print("Lists are the same")
-    else:
-        print("Lists are NOT the same")
-        #ToDo : At this point we need to check the local cache and update Google with any updates that need to be applied
-        #We also need to make the local files match Google
-        ConsolidateMemberLists()
-
-    if (GoogleConnectionGood):
-        MemberDictionary = MemberDictionaryGoogle
-        NameToID = NameToIDGoogle
-        DatabaseLocation = DATABASE_GOOGLE
-    else:
-        print("Google connection not active. Using local lists")
-        MemberDictionary = MemberDictionaryLocal
-        NameToID = NameToIDLocal
-        DatabaseLocation = DATABASE_LOCAL
-
-    #Scan the active list and make sure all member directories exist
-    #Make sure the Members local directory exists
-    CheckAndMakePath("./Members")
-    for Member in MemberDictionary:
-        MemberPath = "./Members/" + Member
-        UserActivityFilename = MemberPath + "/" + UserActivityFilename
+    f = open('Members.txt', "r")
+    lines = f.readlines()
+    for line in lines:
+        line = line.rstrip()
+        fields = line.split("\t")
+        ID = fields[0]
+        Name = fields[1]
+        Type = fields[2]
+        InOut = fields[3]
+        Status = fields[4]
+        #Build a dictionary for the member details
+        Member =	{
+            "Name": Name,
+            "Type": Type,
+            "InOut": InOut,
+            "Status": Status
+        }
+        #Add the member dictionary entry to the global member dictionary
+        MemberDictionary[ID] = Member
+        NameToID[Name] = ID
+        CurrentUserID = ID
+        #Make sure that the member ID database path exists
+        MemberPath = "./Members/" + ID
+        CurrentUserActivityFilename = MemberPath + "/" + UserActivityFilename
+        CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         if (not os.path.exists(MemberPath)):
             #Directory does not exists so create both directory and new log file
             os.mkdir(MemberPath)	
-        if (not os.path.exists(UserActivityFilename)):
+        if (not os.path.exists(CurrentUserActivityFilename)):
             UpdateCurrentUserStatusFiles(UserStatus.CREATED)
-
+    if (GoogleConnectionGood):
+        if (MemberDictionaryGoogle == MemberDictionary):
+            print("Lists are the same")
+        else:
+            print("Lists are NOT the same")
 
 
 def CheckAndMakePath(Path):
@@ -494,8 +514,8 @@ def FilterDictionary(SearhFor):
     FilteredMembersNames = []
     FilteredDictionary = {}
     pattern = ".*" + re.escape(SearhFor)
-    for ID in MemberDictionaryLocal:
-        Data = MemberDictionaryLocal[ID]
+    for ID in MemberDictionary:
+        Data = MemberDictionary[ID]
         Name = Data["Name"]
         if re.match(pattern, Name, re.IGNORECASE):
             #Add the member dictionary entry to the global member dictionary
@@ -504,63 +524,39 @@ def FilterDictionary(SearhFor):
     FilteredMembers =  FilteredDictionary
     FilteredMembersNames.sort(key=str.lower)
     
-def AddMemberToDictionary(MemberList, IDList, ID, Name, Type, InOut, Status):
-    Member =	{
-        "Name": Name,
-        "Type": Type,
-        "InOut": InOut,
-        "Status": Status
-    }
-    #Add the member dictionary entry to the global member dictionary
-    MemberList[ID] = Member
-    IDList[Name] = ID
-
 def GoogleReadMembers():
     """"
     Load the list of members from Google Sheets
     Only do this though if a good Google connection exists and it is longer than the refresh period since last updated
     This should be safe unless a user goes from one entry pad to another quicker than this period
     """
+    global GoogleSheet
     global MemberDictionaryGoogle
     global NameToIDGoogle
     global GoogleMemberLastUpdatesAt
-    global GoogleMemberCount
 
     if (GoogleConnectionGood) and ((datetime.now() - GoogleMemberLastUpdatesAt) > timedelta(seconds=ConfigGoogleMemberUpdateTime)):
-        GoogleMemberCount = int(GoogleMembersSheet.acell('B1').value)
-        MemberData = GoogleMembersSheet.get_all_values()[2:GoogleMemberCount + 3]
+        MemberCount = int(GoogleSheet.sheet1.acell('B1').value)
+        MemberData = GoogleSheet.sheet1.get_all_values()[2:MemberCount + 3]
         GoogleMemberLastUpdatesAt = datetime.now()
         MemberDictionaryGoogle.clear()
         NameToIDGoogle.clear()
         for Info in MemberData:
             #Build a dictionary for the member details
-            #Arrays are indexed from 0. sheet columns indexed from 1
-            ID = Info[GOOGLE_ID_COL - 1]
-            Name = Info[GOOGLE_NAME_COL - 1]
-            Type = Info[GOOGLE_TYPE_COL - 1]
-            InOut = Info[GOOGLE_INOUT_COL - 1]
-            Status = Info[GOOGLE_STATUS_COL - 1]
-            AddMemberToDictionary(MemberDictionaryGoogle, NameToIDGoogle, ID, Name, Type, InOut, Status)
-
-def LocalReadMembers():
-    global MemberDictionaryLocal
-    global NameToIDLocal
-	#See if there is a list of members
-    if (os.path.exists("Members.txt")):
-        f = open('Members.txt', "r")
-        MemberDictionaryLocal.clear()
-        NameToIDLocal.clear()
-        lines = f.readlines()
-        for line in lines:
-            line = line.rstrip()
-            Info = line.split("\t")
-            #Arrays are indexed from 0. sheet columns indexed from 1
-            ID = Info[GOOGLE_ID_COL - 1]
-            Name = Info[GOOGLE_NAME_COL - 1]
-            Type = Info[GOOGLE_TYPE_COL - 1]
-            InOut = Info[GOOGLE_INOUT_COL - 1]
-            Status = Info[GOOGLE_STATUS_COL - 1]
-            AddMemberToDictionary(MemberDictionaryLocal, NameToIDLocal, ID, Name, Type, InOut, Status)
+            ID = Info[0]
+            Name = Info[1]
+            Type = Info[2]
+            InOut = Info[3]
+            Status = Info[4]
+            Member =	{
+                "Name": Name,
+                "Type": Type,
+                "InOut": InOut,
+                "Status": Status
+            }
+            #Add the member dictionary entry to the global member dictionary
+            MemberDictionaryGoogle[ID] = Member
+            NameToIDGoogle[Name] = ID
 
 
 def InitialSetup():
@@ -569,18 +565,34 @@ def InitialSetup():
     If a Google connection is good then the member list and status is read from Google
     This is then compared with the local list but for the moment nothing is done if different
     """
-    #If Google connection is good then read the Google member list
     GoogleReadMembers()
-    #If a local list exists then read the local member list
-    LocalReadMembers()
-    #Now check both lists and update as necessary
-    CheckMemberLists()
+	#See if there is a list of members
+    if (os.path.exists("Members.txt")):
+		#Yes, so make sure all necessary folders also exist
+        CheckAndMakePath("./Members")
+		#Now cycle through all members and make sure they have a directory
+        #This also builds a list of all members
+        CheckMembers()
+    else:
+        if (GoogleConnectionGood):
+            #No local Members file so build from Google retrieved list
+            with open("Members.txt", 'w') as file:
+                for Member in MemberDictionaryGoogle:
+                    Data = Member + "\t" + MemberDictionaryGoogle[Member]["Name"] + "\t" + MemberDictionaryGoogle[Member]["Type"] + "\t" + MemberDictionaryGoogle[Member]["InOut"] + "\t" + MemberDictionaryGoogle[Member]["Status"] + "\n"
+                    file.write(Data)
+            file.close()
+            #Now go ahead and create all the directories and files
+            CheckAndMakePath("./Members")
+            #Now cycle through all members and make sure they have a directory
+            #This also builds a list of all members
+            CheckMembers()                
+        else:
+            print("ERROR : No 'Members.txt' file exists.")
+            print("        A Members file must exists with at least one ADMIN member.")
+            exit(-1)
 
-    #Initialize the 500ms timer event for things like cursor blink, timeout timers etc...
-    pygame.time.set_timer(INTERVAL_TIMER_EVENT, 500)
+    pygame.time.set_timer(INTERVAL_TIMER_EVENT, 500)                
 
-    #Reset the filtered member list
-    FilterDictionary("")
     
 def ProcessNameClick(Name):
     """Update the search text box and current user to match the clicked name.
@@ -632,7 +644,7 @@ def UpdateCurrentUserStatusFiles(Status):
         #Update the Members Google sheet
         Row = FindGoogleIDRow(CurrentUserID) 
         StatusText = GoogleStatusText[Status]
-        GoogleMembersSheet.update_cell(Row,GOOGLE_INOUT_COL, StatusText)
+        GoogleSheet.sheet1.update_cell(Row,GOOGLE_INOUT_COL, StatusText)
         #Then update the individual member tracking
         #ToDo : 
 
@@ -793,6 +805,7 @@ def ProcessEvents():
     Then check current menu status specific events (button clicks etc...)"""
     global SomethingHappened
     for event in pygame.event.get(): 
+        SomethingHappened = True
         ProcessGeneralEvents(event)
         if ((CurrentMenu == MenuState.SEARCH) or (CurrentMenu == MenuState.CHECKINOUT)):
             ProcessLoginSearchWindowEvents(event)
@@ -839,7 +852,11 @@ def TriggerNameUpdate(Name):
         Name (string): Name to search for"""
     global NameTextBoxText
     global NameTextChanged
+    global SomethingHappened
 
+    print ("TriggerNameUpdate")
+    
+    SomethingHappened = True
     ProcessNameClick(Name)
     UpdateDisplay()
 
@@ -856,8 +873,8 @@ def CheckCard():
             print(CharctersInBuffer, " characters in the UART buffer")
             Card = SerialPort.readline().strip().decode('utf-8')[8:16]
             print("Card ID = ", Card)
-            if (Card in MemberDictionaryLocal):
-                MemberData = MemberDictionaryLocal.get(Card)
+            if (Card in MemberDictionary):
+                MemberData = MemberDictionary.get(Card)
                 MemberName = MemberData["Name"]
                 print("Card ID", Card, "belongs to ", MemberName)
                 TriggerNameUpdate(MemberName)
@@ -876,139 +893,21 @@ def CheckInternetActive(url="http://www.google.com", timeout=5):
     except (requests.ConnectionError, requests.Timeout):
         return False
 
-def ReferenceToColumn(Ref):
-    """
-    Converts an Excel column name to a  1-based column number.
-    From https://venkys.io/articles/details/excel-sheet-column-number
-    Args:
-        str: The Excel column name (e.g., 'A', 'AA').
-    Returns:
-        column_number (int): The 1-based column number (e.g., 1 for 'A', 27 for 'AA').
-    """
-    result = 0
-    for char in Ref:
-        result = result * 26 + (ord(char) - ord('A') + 1)
-    return result
-
-def ColumnToReference(Col):
-    """
-    Converts a 1-based column number to its Excel column name.
-    Generated by Google AI
-    Args:
-        column_number (int): The 1-based column number (e.g., 1 for 'A', 27 for 'AA').
-    Returns:
-        str: The Excel column name (e.g., 'A', 'AA').
-    """
-    Initial = Col
-    if not isinstance(Col, int) or Col <= 0:
-        raise ValueError("Column number must be a positive integer.")
-
-    result = ""
-    while Col > 0:
-        # Adjust for 0-based indexing ('A' is 1, not 0)
-        remainder = (Col - 1) % 26
-        result = chr(65 + remainder) + result
-        Col = (Col - 1) // 26
-    return result
-
-     
-def GoogleAddLoggingMember(MemberID, Column):
-    """
-    Add the MemberID headings to the specified cell column in the Logging Google sheet
-    ToDo : Chcek if the sheet is wide enough? Expand if not?
-    """
-    CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    DataToWrite = [
-        ['ID', MemberID, '=SUM(E:E)'],
-        ['Action', 'Timestamp', 'Location'],
-        ['CREATED', CurrentDataTime, CurrentPadLocation] 
-    ]
-    Range = ColumnToReference(Column) + "2:" + ColumnToReference(Column + 2) + "4"
-
-    try:    
-        #Note: 'user_entered' is appended so that the formula is taken as though typed in rather than adding the text to the cell which would add a ' at the start
-        GoogleLoggingSheet.batch_update([{'range':Range, 'values':DataToWrite}], value_input_option=gspread.utils.ValueInputOption.user_entered) 
-    except gspread.exceptions.APIError as e:
-        print("ERROR", e, type(e))
-        #Most likely a quote error, so delay and try again
-        #ToDo : Really need more robust error checking since might be some other error
-        print("Write quota exceeded. Please wait...")
-        time.sleep(65)
-        #Then try aggain
-        try:    
-            GoogleLoggingSheet.batch_update([{'range':Range, 'values':DataToWrite}])
-        except gspread.exceptions.APIError as e:
-            print("ERROR", e, type(e))
-            print("Critical error. Write quota exceeded again I don't know what to do now!!!")#I do eally know, but too lazy at the moment to implement!!
-
-
-def GoogleCheckLoggingValid():
-    """
-    Check all the members in the Members sheet have valid and correct entries in the Logging sheet
-    ToDo : Should really do this after consolidating the Google and Local lists.
-    """
-    #Read the current member list
-    GoogleReadMembers()
-    RequiredColmnCount = (4 * GoogleMemberCount) + 1
-    ActualColumnCount = GoogleLoggingSheet.col_count
-    if (RequiredColmnCount > ActualColumnCount):
-        GoogleLoggingSheet.add_cols(RequiredColmnCount - ActualColumnCount)
-    #Read the Logging headers
-    #Current headers are Action, Timestamp, Location, Spare
-    LoggingHeadersID = GoogleLoggingSheet.row_values(2)
-    LoggingHeadersIDLength = len(LoggingHeadersID)
-    #Scan the member list.
-    #Check that the ID matches the order on the Members list.
-    # If yes, move to next member
-    # If no and not blank then this is an error!!
-    # If blank then create it
-    MemberIndex = 0 #Python lists are indexed from 0->
-    for MemberID in MemberDictionaryGoogle:
-        #Dictionary indexes are from 0-> but Google Sheet columns are consideed from 1-> so this starts at Google column "C" with spacing 4 columns
-        #Starting at MemberDictionaryGoogle[0] check Google Sheet column 3 ("C")
-        GoogleLoggingIndex = (MemberIndex * 4) + 3 
-        #Check if desired position is beyond current Google Sheet header length. If not, then not fallen off the end, if yes then this entry must not be there
-        if (GoogleLoggingIndex <= LoggingHeadersIDLength):
-            LoggingEntry = LoggingHeadersID[GoogleLoggingIndex - 1]
-            if (MemberID != LoggingEntry):
-                if (LoggingEntry != ""):
-                    print("Critical error. Logging sheet does not match Members order!!!")
-                else:
-                    print("Adding member ", MemberID, " to logging sheet")
-                    #Member ID missing so add a new table entry
-                    GoogleAddLoggingMember(MemberID, GoogleLoggingIndex - 1) #-1 since we need to 'skip back' a column for the "ID" text
-        else:
-            #Headers are missing members from the list so go ahead and add them all at once so we 'save' our write quote
-            #ToDo : For the moment just add one at a time with a delay every so often to try to minimize write quote usage
-            # Need to trap all quote errors though eventually
-            GoogleAddLoggingMember(MemberID, GoogleLoggingIndex - 1) #-1 since we need to 'skip back' a column for the "ID" text
-        MemberIndex = MemberIndex + 1
-
 def InitGoogle():
     global GoogleConnectionGood
-    global GoogleMembersSheet
-    global GoogleLoggingSheet
+    global GoogleSheet
     """Try to open a connection with the Google workbook"""
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file("Credentials.json", scopes=scopes)
     client = gspread.authorize(creds)
     try:
-        GoogleMembersSheet = client.open_by_key(ConfigGoogleSheetID).worksheet("Members")
-        try:
-            GoogleLoggingSheet = client.open_by_key(ConfigGoogleSheetID).worksheet(CurrentLoggingSheetName)
-        except:
-            #Logging sheet doesn't exist so create it
-            #ToDo : 
-            print("Ooops... Need to do this still !!!")
-            exit(-1)
+        GoogleSheet = client.open_by_key(ConfigGoogleSheetID)
     except:
         GoogleConnectionGood = False
         print("Google connection failed")
     else:
         GoogleConnectionGood = True
         print("Google connected")
-    if ((GoogleConnectionGood) and (ConfigGoogleAutoCreateLog)):
-        GoogleCheckLoggingValid()
 
 def LoadConfig():
     """Load settings from the config.txt file"""
@@ -1017,22 +916,13 @@ def LoadConfig():
     global ConfigUseGoogle
     global ConfigGoogleSheetID
     global ConfigGoogleMemberUpdateTime
-    global ConfigGoogleAutoCreateLog
-    global ConfigDefaultPadLocation
-    global CurrentPadLocation
-    global CurrentLoggingSheetName
 
     ConfigShowIP                 = True # Show network IP address in top left
     ConfigShowPorts              = True # List com ports available to terminal
-    ConfigDefaultPadLocation     = "Workshop" #Default location for the pad
     ConfigUseGoogle              = True #Talk to Google Sheets if possible
     ConfigGoogleMemberUpdateTime = 60*60*24   #Minimum time between member list updates (daily since only one pad at the moment)
     ConfigGoogleSheetID          = "11ORvP8H8YU0XcTJ798n_mOx_Up1-i4hQyVXFD0EeOws" #Test workbook
-    ConfigGoogleAutoCreateLog    = True #Automatically update the Logging sheet if a new member is added
 #    ConfigGoogleSheetID = "12mWa63-2ru-o60eQbMBL9WbbAsfEqvWSVEQrGj7w20s" #Main workbook
-    CurrentLoggingSheetName = "Logging 2025"
-
-    CurrentPadLocation = ConfigDefaultPadLocation
     
 
 ###################################################################################################
@@ -1067,9 +957,10 @@ ResizeWindow()
 running = True
   
 while running: 
-#    CheckCard()
-#    ProcessEvents()   
+    CheckCard()
+    ProcessEvents()   
     UpdateDisplay()
+    SomethingHappened = False
     # clock.tick(60) means that for every second at most 
     # 60 frames should be passed. 
     clock.tick(30) 
