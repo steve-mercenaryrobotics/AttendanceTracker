@@ -38,6 +38,11 @@ ConfigUseGoogle = True
 ConfigGoogleSheetID   = ""
 ConfigGoogleAutoCreateLog = True
 ConfigGoogleMemberUpdateTime = 20
+ConfigListTextColor = pygame.Color('darkred')
+ConfigNameTextBackgroundColor = pygame.Color('lightskyblue3')
+ConfigNameTextColor = pygame.Color('red')
+
+
 CurrentLoggingSheetName = "Logging"
 
 GOOGLE_ID_COL     = 1
@@ -48,6 +53,10 @@ GOOGLE_STATUS_COL = 5
 
 DATABASE_LOCAL  = 0
 DATABASE_GOOGLE = 1
+
+USER_FROM_CARD = 0
+USER_FROM_KEYBOARD = 1
+
 DatabaseLocation = DATABASE_LOCAL
 
 CurrentEvent = "Workshop"
@@ -55,10 +64,7 @@ CurrentEvent = "Workshop"
 WindowWidth  = 1024
 WindowHeight = 600
 
-UserPhotoFilename    = "Photo.jpg"
-UserActivityFilename = "Activity.log"
-CurrentUserPhotoFilename = ""
-CurrentUserActivityFilename = ""
+MemberActivityFilename = "Activity.log"
 
 #BackgroundColor = (100,255,255)
 BackgroundColor = (255,255,255)
@@ -70,13 +76,16 @@ ButtonHeight = 90
 ButtonCurve = 25
 ButtonThickness = 0
 
+
+UserToSearch = ""
+UserToSearchChanged = True
+UserFromCardOrKeyboard = USER_FROM_KEYBOARD
+UserFromCardValid = False
+UserFromKeyboardValid = False
+
 NameTextBox = []
 NameTextBoxHeight = 50
-NameTextBackgroundColor = pygame.Color('lightskyblue3')
-NameTextColor = pygame.Color('red')
 NameTextBoxText = ""
-NameTextChanged = True
-ListTextColor = pygame.Color('darkred')
 
 LoadedPhoto = 0
 Photo2Display = 0
@@ -113,25 +122,25 @@ GoogleMemberCount = 0
 GoogleMemberLastUpdatesAt = datetime.now() - timedelta(days=1000)
 
 class UserStatus(Enum):
-    ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED = range(5)
+    ERROR, CREATED, CHECKIN, CHECKOUT, DISABLED = range(5)
 
 UserStatusText = {
-    UserStatus.ERROR : "ERROR",
-    UserStatus.CREATED : "CREATED",
-    UserStatus.CHECKEDIN : "CHECKEDIN",
-    UserStatus.CHECKEDOUT : "CHECKEDOUT",
+    UserStatus.ERROR    : "ERROR",
+    UserStatus.CREATED  : "CREATED",
+    UserStatus.CHECKIN  : "CHECKIN",
+    UserStatus.CHECKOUT : "CHECKOUT",
     UserStatus.DISABLED : "DISABLED"
 }
 
 GoogleStatusText = {
-    UserStatus.ERROR : "ERROR",
-    UserStatus.CREATED : "Out",
-    UserStatus.CHECKEDIN : "In",
-    UserStatus.CHECKEDOUT : "Out",
+    UserStatus.ERROR    : "ERROR",
+    UserStatus.CREATED  : "Out",
+    UserStatus.CHECKIN  : "In",
+    UserStatus.CHECKOUT : "Out",
     UserStatus.DISABLED : "DISABLED"
 }
 
-CurrentUserStatus = UserStatus.CHECKEDOUT
+CurrentUserStatus = UserStatus.ERROR
 CurrentUserID = ""
 CurrentUserName = ""
 
@@ -301,7 +310,7 @@ def DrawListBox(Bounds, List, TextColor):
         TextColor(pygame.Color): List entries text color
         """
     global FilteredEntryCount
-    DrawBox(Bounds, NameTextBackgroundColor, 2, 'Black')
+    DrawBox(Bounds, ConfigNameTextBackgroundColor, 2, 'Black')
     FilteredEntryCount = len(List)
     MaxDisplayable = math.floor(Bounds[3] / NameTextHeight)
     if (FilteredEntryCount > MaxDisplayable):
@@ -328,76 +337,12 @@ def DrawTextInputBox(Bounds, Text, TextColor, BackgroundColor, BorderColor, Bord
     txt_surface = font.render(Text + Cursor, True, TextColor)
     screen.blit(txt_surface, (Bounds[0] + 5, Bounds[1] + 5))
 
-def GetCurrentUserStatus():
-    """Get the current user's information and status from the latest Google member update or their local database file if offline"""
-    last_line = ""
-    global CurrentUserPhotoFilename
-    global CurrentUserActivityFilename
-    global CurrentUserStatus
-    global CurrentUserID
-    global CurrentUserName
-    
-    CurrentUserName = NameTextBoxText
-    CurrentUserID = NameToIDLocal[CurrentUserName]
-    #Open the current user log file and get their status, photo etc
-    UserPhotos = BuildFileList("./Members/" + CurrentUserID + "/Photos")
-    if (len(UserPhotos) > 0):
-        CurrentUserPhotoFilename = "./Members/" + CurrentUserID + "/Photos/" + random.choice(UserPhotos)
-    else:
-        CurrentUserPhotoFilename = "Splash/" + random.choice(SplashFiles)
-    CurrentUserActivityFilename = "./Members/" + CurrentUserID + "/" + UserActivityFilename
-
-    if (GoogleConnectionGood):
-        GoogleReadMembers()
-        CurrentMember = MemberDictionaryGoogle[CurrentUserID]
-        TimeStamp = ""
-        Location = ""
-        if (CurrentMember["InOut"] == "In"):
-            Action = "CHECKEDIN"
-            Error = False
-        elif (CurrentMember["InOut"] == "Out"):
-            Action = "CHECKEDOUT"
-            Error = False
-        else:
-            Action = "ERROR"
-            Error = True
-    elif (os.path.exists(CurrentUserActivityFilename)):
-        with open(CurrentUserActivityFilename, 'r') as f:
-            last_line = f.readlines()[-1]
-        #Now extract the date/time, location and last action
-        Info = re.search('(.*),(.*),(.*)', last_line)
-        if(Info):
-            TimeStamp = Info.group(1)
-            Location = Info.group(2)
-            Action = Info.group(3)
-            Error = False
-        else:
-            TimeStamp = ""
-            Action = ""
-            Location = ""
-            Error = True
-    else:
-        TimeStamp = ""
-        Action = ""
-        Location = ""
-        Error = True
-    
-    if ((not Error)):
-        if ((Action == "CHECKEDOUT") or (Action == "CREATED")):
-            CurrentUserStatus = UserStatus.CHECKEDOUT
-        elif (Action == "CHECKEDIN"):
-            CurrentUserStatus = UserStatus.CHECKEDIN
-        else:
-            CurrentUserStatus = UserStatus.ERROR
-    else:
-        CurrentUserStatus = UserStatus.ERROR
-
     
 def DisplaySearchScreen(Names):
     """Render the search window, populating the member name list box"""
 #    screen.fill(BackgroundColor) 
-    DrawTextInputBox(NameTextBoxRect, NameTextBoxText, NameTextColor, NameTextBackgroundColor, 'black', 2)
-    DrawListBox(NameListRect, Names, ListTextColor)
+    DrawTextInputBox(NameTextBoxRect, NameTextBoxText, ConfigNameTextColor, ConfigNameTextBackgroundColor, 'black', 2)
+    DrawListBox(NameListRect, Names, ConfigListTextColor)
 
 def UpdateDisplay():
     """
@@ -468,12 +413,16 @@ def CheckMemberLists():
     CheckAndMakePath("./Members")
     for Member in MemberDictionary:
         MemberPath = "./Members/" + Member
-        UserActivityFilename = MemberPath + "/" + UserActivityFilename
+        CurrentMemberActivityFilename = MemberPath + "/" + MemberActivityFilename
         if (not os.path.exists(MemberPath)):
             #Directory does not exists so create both directory and new log file
             os.mkdir(MemberPath)	
-        if (not os.path.exists(UserActivityFilename)):
-            UpdateCurrentUserStatusFiles(UserStatus.CREATED)
+        if (not os.path.exists(CurrentMemberActivityFilename)):
+            StatusText = UserStatusText[UserStatus.CREATED]
+            CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            m = open(CurrentMemberActivityFilename, "a")
+            m.write(CurrentDataTime + "," + CurrentEvent + "," + StatusText + "\n")
+            m.close()
 
 
 
@@ -494,8 +443,8 @@ def FilterDictionary(SearhFor):
     FilteredMembersNames = []
     FilteredDictionary = {}
     pattern = ".*" + re.escape(SearhFor)
-    for ID in MemberDictionaryLocal:
-        Data = MemberDictionaryLocal[ID]
+    for ID in MemberDictionary:
+        Data = MemberDictionary[ID]
         Name = Data["Name"]
         if re.match(pattern, Name, re.IGNORECASE):
             #Add the member dictionary entry to the global member dictionary
@@ -582,26 +531,6 @@ def InitialSetup():
     #Reset the filtered member list
     FilterDictionary("")
     
-def ProcessNameClick(Name):
-    """Update the search text box and current user to match the clicked name.
-    Get the new clicked name status ready to update the display accordingly
-    Parameters:
-        Name (String): New user's name"""
-    global NameTextBoxText
-    global NameTextChanged
-    global CurrentMenu
-    global PhotoState
-
-    NameTextBoxText = Name
-    NameTextChanged = True
-    CurrentMenu = MenuState.CHECKINOUT
-    GetCurrentUserStatus()
-    if (os.path.exists(CurrentUserPhotoFilename)):
-        LoadPhoto(CurrentUserPhotoFilename)
-        PhotoState = -100
-    else:
-        SetWaitingPhoto()
-
 def FindGoogleIDRow(ID):
     """
     Find the corresponding Google Sheet row number for the specified used ID
@@ -615,13 +544,14 @@ def FindGoogleIDRow(ID):
     #If we reach here then a fatal error has occured!!!
     print("Serious Error !!!")
  
-def UpdateCurrentUserStatusFiles(Status):
-    """Update the current user status in the tracking databases.
+def UpdateCurrentUserLog(Action):
+    """Update the current user Action in the tracking databases.
     Additionally update the Google sheet if the Google connection is active.
     ToDo : If Google is NOT active then we need to log the necessary updates.
     Parameters:
         Status (UserStatus.): ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED.
     """
+    #ToDo : Everything. This is completely wrong at the moment
     StatusText = UserStatusText[Status]
     CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     #Append action to file
@@ -636,115 +566,57 @@ def UpdateCurrentUserStatusFiles(Status):
         #Then update the individual member tracking
         #ToDo : 
 
-def UpdateCurrentUserStatus(Status):
-    """Update the current user status to the new status.
-    Update the tracking database accordingly.
-    Clears any timeouts and clears the text box text.
-    Parameters:
-        Status (UserStatus.): ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED.
-    """
-    global CurrentUserStatus
-    global NameTextBoxText
-    global NameTextChanged
-    global CheckInOutTimeoutClick
-    global CheckInOutTimeoutCard
-    global TimeoutCardActive
-    global TimeoutClickActive
-
-    CurrentUserStatus = Status
-    UpdateCurrentUserStatusFiles(Status)
-    MemberDictionaryGoogle[CurrentUserID]["InOut"] = GoogleStatusText[Status]
-    NameTextBoxText = "" 
-    NameTextChanged = True
-    CheckInOutTimeoutClick = 0
-    CheckInOutTimeoutCard = 0
-    TimeoutCardActive = False
-    TimeoutClickActive = False
-
-
-def ProcessMouseDownSearchCheckinCheckout(event):
-    """Process mouse click events in the search window and redirect to specific target processing.
-    If clicked in text box then set the cursor blinking and capture keyboard events to update the text
-    If a name in the list is clicked then process the name.
-    If clicked on a check in/out button then update the member status"""
-    global TextInputActive
-    global CursorBlinkState
-    global CurrentUserStatus
-    global NameTextBoxText
-    global NameTextChanged
-    global CheckInOutTimeoutClick
-    global CheckInOutTimeoutCard
-    global TimeoutClickActive
-    global TimeoutCardActive
-    global TimeoutClickClear
-    global TimeoutCardClear
-
-#Text always active now so can use keyboard mimic card reader
-#    if NameTextBoxRect.collidepoint(event.pos): 
-#        TextInputActive = True
-#        CursorBlinkState = True
-#        pygame.time.set_timer(CURSOR_BLINK_TIMER_EVENT, 500)                
-#    else: 
-#        TextInputActive = False
-#        CursorBlinkState = False
-        
-    if NameListRect.collidepoint(event.pos): 
-        EntryHit = math.floor((event.pos[1] - NameListRect[1]) / NameTextHeight)
-        if (EntryHit < len(FilteredMembersNames)):
-            #Clicked on a single entry so make it the currently selected user and prepare to check in/out
-            ProcessNameClick(FilteredMembersNames[EntryHit])
-            CheckInOutTimeoutClick = CHECKINOUTCLICK_TIMEOUT
-            TimeoutClickActive =True
-        else:
-            #Clicked in empty region below names
-            #Clear the timeout if so and reset the display
-            if (TimeoutClickActive):
-                TimeoutClickClear = True
-            if (TimeoutCardActive):
-                TimeoutCardClear = True
-    elif ((CurrentUserStatus == UserStatus.CHECKEDOUT) and (CheckInRect.collidepoint(event.pos))):
-        UpdateCurrentUserStatus(UserStatus.CHECKEDIN)
-        SetWaitingPhoto()
-    elif ((CurrentUserStatus == UserStatus.CHECKEDIN) and (CheckOutRect.collidepoint(event.pos))):
-        UpdateCurrentUserStatus(UserStatus.CHECKEDOUT)
-        SetWaitingPhoto()
-    else:
-        #Clicked somewhere else other than a button or the list
-        if (TimeoutClickActive):
-            TimeoutClickClear = True
-        if (TimeoutCardActive):
-            TimeoutCardClear = True
-
 def SetWaitingPhoto():
     PhotoFilename = "Splash/" + random.choice(SplashFiles)
     LoadPhoto(PhotoFilename)
     PhotoState = -100
     
+def KeystrokeIsValid(Keystroke):
+    if ((Keystroke >= ord('A')) and (Keystroke <= ord('Z'))) or ((Keystroke >= ord('0')) and (Keystroke <= ord('9'))) or (Keystroke == ord(' ')):
+        return True
+    else:
+        return False
 
-def ProcessMouseDown(event):
-    """Process mouse events based on the currenly active menu state"""
-    global TextInputActive
-    global CursorBlinkState
-    global NameTextBoxText
-    global NameTextChanged
+def ToUpper(Keystroke):
+    if (Keystroke < 256):
+        KeyChar = chr(Keystroke)
+    else:
+        print("Huhh!!!")
+        KeyChar = 'X'
 
-    if ((CurrentMenu == MenuState.SEARCH) or (CurrentMenu == MenuState.CHECKINOUT)):
-        ProcessMouseDownSearchCheckinCheckout(event)
+    return ord(KeyChar.upper())
 
-def ProcessKeyDown(event):
+def ProcessKeyDown(Keystroke):
     """Process the keyboard events and update the text accordingly"""
-    global NameTextBoxText
-    global NameTextChanged
+    global UserFromCardOrKeyboard
+    global UserFromCardValid
+    global UserToSearch
+    global UserToSearchChanged
+
+    #We detect where the user information is coming from here
+    #If neither keyboard or card then user to search should also be blank
+    #If '0' and was perviously from keyboard then clear any existing text and use the card number
+    #Not case sensitive, so convert to uper case
+    UserFromCardValid = False
+    Keystroke = ToUpper(Keystroke)
+    if (Keystroke == pygame.K_0):
+        if (UserFromCardOrKeyboard == USER_FROM_KEYBOARD):
+            UserToSearch = ""
+            UserToSearchChanged = True
+        UserFromCardOrKeyboard = USER_FROM_CARD
+
+    #Depending on whether keystroke came from the keyboard
     # Check for backspace 
-    if event.key == pygame.K_BACKSPACE: 
+    if (Keystroke == pygame.K_BACKSPACE):
         # get text input from 0 to -1 i.e. end. 
-        NameTextBoxText = NameTextBoxText[:-1] 
-    # Unicode standard is used for string 
-    # formation 
-    else: 
-        NameTextBoxText += event.unicode
-    #Note that the text has changed so we can update the filtered list
-    NameTextChanged = True
+        UserToSearch = UserToSearch[:-1]
+        UserToSearchChanged = True
+    elif ((Keystroke == pygame.K_RETURN) and (UserFromCardOrKeyboard == USER_FROM_CARD)):
+        #End of the string. Only relevant from card reader
+        UserFromCardValid = True
+    elif (KeystrokeIsValid(Keystroke)): 
+        UserToSearch += chr(Keystroke)
+        UserToSearchChanged = True
 
 def ProcessIntervalTimerEvent():
     """Process the interval timers for the touch screen and card/tag timeout timers"""
@@ -770,13 +642,16 @@ def ProcessCursorBlinkTimerEvent():
         CursorBlinkState = False
                 
 def ProcessLoginSearchWindowEvents(event):
-    """Process events specifif to the search menu"""
-    if event.type == pygame.MOUSEBUTTONDOWN: 
-        ProcessMouseDown(event)
-    elif event.type == pygame.KEYDOWN: 
-        ProcessKeyDown(event)
-    elif event.type == CURSOR_BLINK_TIMER_EVENT: 
+    """
+    Process events specifif to the search menu
+    """
+    if ((event.type == pygame.KEYDOWN) and (event.unicode != '')): 
+        ProcessKeyDown(ord(event.unicode))
+    elif (event.type == CURSOR_BLINK_TIMER_EVENT): 
         ProcessCursorBlinkTimerEvent()
+    
+#    elif event.type == pygame.MOUSEBUTTONDOWN: 
+#        ProcessMouseDown(event)
 
 def ProcessGeneralEvents(event):
     """Process general events like timers etc..."""
@@ -787,11 +662,9 @@ def ProcessGeneralEvents(event):
         ProcessIntervalTimerEvent()
 
 def ProcessEvents():
-    """Check if any events are scheduled. 
-    If yes, note that something has happened.
-    Next, check and process any general events (timers etc...).
-    Then check current menu status specific events (button clicks etc...)"""
-    global SomethingHappened
+    """
+    Check if any events are scheduled. 
+    """
     for event in pygame.event.get(): 
         ProcessGeneralEvents(event)
         if ((CurrentMenu == MenuState.SEARCH) or (CurrentMenu == MenuState.CHECKINOUT)):
@@ -832,17 +705,6 @@ def InitComPort():
         print("No serial ports found. Cannot connect to RFID interface.")
         SerialPortOpened = False
 
-def TriggerNameUpdate(Name):
-    """Updates the search box text and list contents to filter to the supplied name
-    then updates the display accordingly
-    Parameters:
-        Name (string): Name to search for"""
-    global NameTextBoxText
-    global NameTextChanged
-
-    ProcessNameClick(Name)
-    UpdateDisplay()
-
 def CheckCard():
     """Checks if a card or tag has been presented to the card reader"""
     global SerialPortOpened
@@ -856,8 +718,8 @@ def CheckCard():
             print(CharctersInBuffer, " characters in the UART buffer")
             Card = SerialPort.readline().strip().decode('utf-8')[8:16]
             print("Card ID = ", Card)
-            if (Card in MemberDictionaryLocal):
-                MemberData = MemberDictionaryLocal.get(Card)
+            if (Card in MemberDictionary):
+                MemberData = MemberDictionary.get(Card)
                 MemberName = MemberData["Name"]
                 print("Card ID", Card, "belongs to ", MemberName)
                 TriggerNameUpdate(MemberName)
@@ -916,12 +778,13 @@ def GoogleAddLoggingMember(MemberID, Column):
     """
     Add the MemberID headings to the specified cell column in the Logging Google sheet
     ToDo : Chcek if the sheet is wide enough? Expand if not?
+    ToDo : Should also set the Members sheet status to "Out" too
     """
     CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     DataToWrite = [
         ['ID', MemberID, '=SUM(E:E)'],
-        ['Action', 'Timestamp', 'Location'],
-        ['CREATED', CurrentDataTime, CurrentPadLocation] 
+        ['Timestamp', 'Location', 'Action'],
+        [CurrentDataTime, CurrentPadLocation, 'CREATED'] 
     ]
     Range = ColumnToReference(Column) + "2:" + ColumnToReference(Column + 2) + "4"
 
@@ -954,7 +817,7 @@ def GoogleCheckLoggingValid():
     if (RequiredColmnCount > ActualColumnCount):
         GoogleLoggingSheet.add_cols(RequiredColmnCount - ActualColumnCount)
     #Read the Logging headers
-    #Current headers are Action, Timestamp, Location, Spare
+    #Current headers are Timestamp, Location, Action, 'In' time
     LoggingHeadersID = GoogleLoggingSheet.row_values(2)
     LoggingHeadersIDLength = len(LoggingHeadersID)
     #Scan the member list.
@@ -1021,19 +884,49 @@ def LoadConfig():
     global ConfigDefaultPadLocation
     global CurrentPadLocation
     global CurrentLoggingSheetName
+    global ConfigListTextColor
+    global ConfigNameTextBackgroundColor
+    global ConfigNameTextColor
 
-    ConfigShowIP                 = True # Show network IP address in top left
-    ConfigShowPorts              = True # List com ports available to terminal
-    ConfigDefaultPadLocation     = "Workshop" #Default location for the pad
-    ConfigUseGoogle              = True #Talk to Google Sheets if possible
-    ConfigGoogleMemberUpdateTime = 60*60*24   #Minimum time between member list updates (daily since only one pad at the moment)
-    ConfigGoogleSheetID          = "11ORvP8H8YU0XcTJ798n_mOx_Up1-i4hQyVXFD0EeOws" #Test workbook
-    ConfigGoogleAutoCreateLog    = True #Automatically update the Logging sheet if a new member is added
-#    ConfigGoogleSheetID = "12mWa63-2ru-o60eQbMBL9WbbAsfEqvWSVEQrGj7w20s" #Main workbook
-    CurrentLoggingSheetName = "Logging 2025"
+    ConfigShowIP                  = True # Show network IP address in top left
+    ConfigShowPorts               = True # List com ports available to terminal
+    ConfigDefaultPadLocation      = "Workshop" #Default location for the pad
+    ConfigUseGoogle               = True #Talk to Google Sheets if possible
+    ConfigGoogleMemberUpdateTime  = 60*60*24   #Minimum time between member list updates (daily since only one pad at the moment)
+    ConfigGoogleSheetID           = "11ORvP8H8YU0XcTJ798n_mOx_Up1-i4hQyVXFD0EeOws"
+    ConfigGoogleAutoCreateLog     = True #Automatically update the Logging sheet if a new member is added
+    ConfigListTextColor           = pygame.Color('darkred')
+    ConfigNameTextBackgroundColor = pygame.Color('lightskyblue3')
+    ConfigNameTextColor           = pygame.Color('red')
+
+    CurrentLoggingSheetName = "Logging"
 
     CurrentPadLocation = ConfigDefaultPadLocation
     
+def ProcessUpdates():
+    """
+    Process anything that needs updating
+    e.g. If card read then convert to name and fill out the search text with the corresponding name etc...
+    """
+    global NameTextBox
+    global NameTextChanged
+    global NameTextBoxText
+    global UserFromCardOrKeyboard
+    global UserToSearchChanged
+
+    if (UserToSearchChanged == True):
+        if (UserFromCardValid == True):        
+            #In this case the user to search is the ID
+            MemberInfo = MemberDictionary[UserToSearch]
+            MemberName = MemberInfo["Name"]
+            #Revert back to assuming the keyboard for future input
+            UserFromCardOrKeyboard = USER_FROM_KEYBOARD
+        else:
+            MemberName = UserToSearch
+        NameTextBoxText = MemberName
+        NameTextChanged = True
+        FilterDictionary(MemberName)
+        UserToSearchChanged = False
 
 ###################################################################################################
 
@@ -1068,7 +961,8 @@ running = True
   
 while running: 
 #    CheckCard()
-#    ProcessEvents()   
+    ProcessEvents()
+    ProcessUpdates()
     UpdateDisplay()
     # clock.tick(60) means that for every second at most 
     # 60 frames should be passed. 
