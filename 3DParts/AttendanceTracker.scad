@@ -1,3 +1,11 @@
+ShowPi = false;
+ShowUSBPlug = false;
+ShowCaseUpper = true;
+ShowCaseLower = true;
+ShowTypeCCap = true;
+
+module __Stop__(){};
+
 $fn = 20;
 $TotalWidth = 230;
 $TotalHeight = 135;
@@ -44,6 +52,9 @@ $TotalHeightV2 = $HeightV2 + $WallV2 + $WallV2;
 $TotalThicknessV2 = $ThicknessV2 + $WallV2 + $WallV2;
 $ShellVOffset = -1;
 
+$BuzzerX = 54;
+$BuzzerZ = -3;
+$BuzzerD = 12;
 
 module RoundedBlock($XDim = 10, $YDim = 10, $ZDim = 10, $D1 = 0, $D2 = 0, $D3 = 0, $D4 = 0, $D5 = 0, $D6 = 0, $D7 = 0, $D8 = 0)
 {
@@ -347,7 +358,7 @@ module AttendanceTrackerShellV2()
     {
       //Main body
       color("lightblue", .4)
-      RoundedBlock($XDim = $TotalWidthV2, $YDim = $TotalHeightV2, $ZDim = $TotalThicknessV2, $D1 = 5, $D2 = 5, $D3 = 5, $D4 = 5, $D5 = 5, $D6 = 5, $D7 = 5, $D8 = 5);
+        RoundedBlock($XDim = $TotalWidthV2, $YDim = $TotalHeightV2, $ZDim = $TotalThicknessV2, $D1 = 5, $D2 = 5, $D3 = 5, $D4 = 5, $D5 = 5, $D6 = 5, $D7 = 5, $D8 = 5);
       //Inside clearance
       cube([$WidthV2, $HeightV2, $ThicknessV2], center = true);
       //Panel opening
@@ -368,15 +379,20 @@ module AttendanceTrackerShellV2()
       translate([74.2 - 10.2 + 47, -60, .5])
         cube([15, 20, 17.6], center = true);
       //Type C socket
-//      translate([-80, -$HeightV2 / 2, -6])
-//        TypeCCable($D = 10, $H = 25, $fn = 50);
-        translate([-1, -24.5, -15])
-          cube([47, 16.1, 10], center = true);
-        //Cable trench
-        translate([19.5, -57.5, -15.0])
-          rotate(90, [1, 0, 0])
-            cylinder(d = 6, h = 50, $fn = 40, center = true);
-      //Pi 5 PCB ckearance
+        //Inner with lip
+      translate([-1 - 4, -24.5, -15])
+        cube([55, 15.1, 10], center = true);
+       //Outer opening for cap
+      translate([-1 - 4, -24.5, -19.8])
+        cube([55, 16.1, 10], center = true);
+      //Type-C opening clip grooves
+      translate([-1 - 4, -24.5, -14.5])
+        cube([55, 18.1, 1], center = true);
+      //Cable trench
+      translate([19.5, -56.5, -15.0])
+        rotate(90, [1, 0, 0])
+          cylinder(d = 6, h = 50, $fn = 40, center = true);
+      //Pi 5 PCB clearance
       translate([92, -60, -7.5])
       cube([60, 10, 2], center = true);
       //Cooling openings Left
@@ -393,12 +409,36 @@ module AttendanceTrackerShellV2()
       //LCD screw clearance
       translate([-38, -$ShellVOffset, $ThicknessV2 / 2])
         PanelMountHoles($HoleD = 9, $Height = 2.2, $center = false, $fn = 50);
+      //Buzzer opening
+      translate([$BuzzerX, -$TotalHeightV2 / 2, $BuzzerZ])
+        rotate(90, [1, 0, 0])
+          cylinder(d = 3, h = 20, center = true, $fn = 30);
+      translate([$BuzzerX, (-$TotalHeightV2 / 2) + 1.2, $BuzzerZ])
+        rotate(-90, [1, 0, 0])
+          cylinder(d = 10, h = 20, $fn = 30);
     }
 
     translate([-30, -($HeightV2 / 2) + 40, -7.5])
       rotate(90, [0, 0, 1])
         TypeCBlock();
+
+    
   }
+
+  //Buzzer mount
+
+      translate([38 + $BuzzerX, (-$TotalHeightV2 / 2) + 1.2, $BuzzerZ - 3.2])
+        rotate(-90, [1, 0, 0])
+          difference()
+          {
+            hull()
+            {
+              cylinder(d = 15, h = 6, $fn = 50);
+              translate([0, -$BuzzerZ + 7, 3])
+              cube([15, 0.01, 6], center = true);
+            }
+            cylinder(d = $BuzzerD, h = 20, $fn = 50);
+          }
 
   //LCD supports
   translate([0, 0, (-$ThicknessV2 / 2) - 3.2 - $WallV2])
@@ -500,6 +540,33 @@ module UpperShellSegmentV2()
   }
 }
 
+module USBPlug()
+{
+  translate([0, 0, 0.5])
+    cube([14, 6, 1], center = true);
+  translate([0, 0.8, 5])
+    cube([12, 2.2, 10], center = true);
+}
+
+module TypeCCap()
+{
+  translate([38 - 5, -1 - 24.5, -17.93])
+  {
+    difference()
+    {
+      union()
+      {
+      //Type C socket
+      cube([54.5, 15.8, 2], center = true);
+      //Type-C opening clip grooves
+      translate([0, 0, 0.2])
+        cube([54, 16.6, 0.8], center = true);
+      }
+      translate([26.5, 0, 0])
+        cube([2, 7, 5], center = true);
+    }
+  }
+}
 
 //RaspberryPiTemplateZero();
 //PanelTemplate();
@@ -521,13 +588,31 @@ difference()
 //PanelTemplate();
 
 //LCD();
-//translate([130, -16.7 - 6, -13])
-//  RaspberryPi5();
+if (ShowPi)
+  translate([130, -16.7 - 6, -13])
+    RaspberryPi5();
 
 //difference()
 //{
-LowerShellSegmentV2();
+intersection()
+{
+if (ShowCaseLower)
+  LowerShellSegmentV2();
+  //Type C cable
+//  translate([-10, -50, -20])
+//#  cube([80, 40, 60]);
+  //Buzzer
+//  translate([84, -70, -20])
+//#  cube([16, 12, 40]);
+}
 //  translate([-100, -100, -50])
 //  cube([100, 200, 100]);
 //}
-//UpperShellSegmentV2();
+if (ShowCaseUpper)
+  UpperShellSegmentV2();
+
+if (ShowUSBPlug)
+  USBPlug();
+
+if (ShowTypeCCap)
+  TypeCCap();

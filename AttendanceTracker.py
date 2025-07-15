@@ -54,9 +54,6 @@ GOOGLE_STATUS_COL = 5
 DATABASE_LOCAL  = 0
 DATABASE_GOOGLE = 1
 
-USER_FROM_CARD = 0
-USER_FROM_KEYBOARD = 1
-
 DatabaseLocation = DATABASE_LOCAL
 
 CurrentEvent = "Workshop"
@@ -79,9 +76,12 @@ ButtonThickness = 0
 
 UserToSearch = ""
 UserToSearchChanged = True
-UserFromCardOrKeyboard = USER_FROM_KEYBOARD
-UserFromCardValid = False
-UserFromKeyboardValid = False
+
+InputFromCardValid = False
+InputFromCardActive = False
+InputFromCard = ""
+InputFromKeyboardActive = False
+InputFromKeyboard = ""
 
 NameTextBox = []
 NameTextBoxHeight = 50
@@ -95,14 +95,22 @@ SplashFiles = []
 
 CursorBlinkState = False
 TextInputActive = True
-CHECKINOUTCLICK_TIMEOUT = 5 * 2 
+#Timeouts in 500ms ticks
+#Unknown card = 2 seconds
+UNKNOWN_CARD_TIMEOUT    = 2 * 2
+#Keybord checkin/out timeout = 5 seconds
+CHECKINOUTCLICK_TIMEOUT = 5 * 2
+#Card checkin/out timeout = 5 seconds
 CHECKINOUTCARD_TIMEOUT  = 5 * 2
-CheckInOutTimeoutClick = 0
-CheckInOutTimeoutCard = 0
-TimeoutCardActive = False
-TimeoutClickActive = False
-TimeoutClickClear = False
-TimeoutCardClear = False
+
+UnknownCardTimeout = 0
+
+CheckInOutTimeoutClick = 0 #ToDo:
+CheckInOutTimeoutCard = 0 #ToDo:
+TimeoutCardActive = False #ToDo:
+TimeoutClickActive = False #ToDo:
+TimeoutClickClear = False #ToDo:
+TimeoutCardClear = False #ToDo:
 
 DisplayNeedUpdated = True
 ComPort = ""
@@ -571,13 +579,37 @@ def SetWaitingPhoto():
     LoadPhoto(PhotoFilename)
     PhotoState = -100
     
-def KeystrokeIsValid(Keystroke):
-    if ((Keystroke >= ord('A')) and (Keystroke <= ord('Z'))) or ((Keystroke >= ord('0')) and (Keystroke <= ord('9'))) or (Keystroke == ord(' ')):
+def KeystrokeIsValidNumber(Keystroke):    
+    """
+    Check if 0-9
+    """
+    if ((Keystroke >= ord('0')) and (Keystroke <= ord('9'))):
+        return True
+    else:
+        return False
+
+def KeystrokeIsValidHexDigit(Keystroke):    
+    """
+    Check if A-F or 0-9
+    """
+    if ((Keystroke >= ord('A')) and (Keystroke <= ord('F')) or ((Keystroke >= ord('0')) and (Keystroke <= ord('9')))):
+        return True
+    else:
+        return False
+
+def KeystrokeIsValidChar(Keystroke):
+    """
+    Check if A-Z or SPC
+    """
+    if ((Keystroke >= ord('A')) and (Keystroke <= ord('Z'))) or (Keystroke == ord(' ')):
         return True
     else:
         return False
 
 def ToUpper(Keystroke):
+    """
+    Convert the keystroke to upper case
+    """
     if (Keystroke < 256):
         KeyChar = chr(Keystroke)
     else:
@@ -588,48 +620,78 @@ def ToUpper(Keystroke):
 
 def ProcessKeyDown(Keystroke):
     """Process the keyboard events and update the text accordingly"""
-    global UserFromCardOrKeyboard
-    global UserFromCardValid
-    global UserToSearch
+    global InputFromCardActive
+    global InputFromCard
+    global InputFromKeyboardActive
+    global InputFromKeyboard
     global UserToSearchChanged
+    global UserToSearch
+    global InputFromCardValid
 
     #We detect where the user information is coming from here
     #If neither keyboard or card then user to search should also be blank
     #If '0' and was perviously from keyboard then clear any existing text and use the card number
     #Not case sensitive, so convert to uper case
-    UserFromCardValid = False
     Keystroke = ToUpper(Keystroke)
-    if (Keystroke == pygame.K_0):
-        if (UserFromCardOrKeyboard == USER_FROM_KEYBOARD):
+
+    if (KeystrokeIsValidNumber(Keystroke)):
+        #All keycard inputs start with '0'        
+        InputFromCardActive = True
+        #Numbers can ONLY come from the card reader so clear any keyboard data
+        if (InputFromKeyboardActive):
+            InputFromKeyboardActive = False
             UserToSearch = ""
             UserToSearchChanged = True
-        UserFromCardOrKeyboard = USER_FROM_CARD
+    elif (KeystrokeIsValidChar(Keystroke)):
+        #Wasn't a number (nor CR) so must be from regular keyboard
+        InputFromKeyboardActive = True
 
     #Depending on whether keystroke came from the keyboard
-    # Check for backspace 
-    if (Keystroke == pygame.K_BACKSPACE):
-        # get text input from 0 to -1 i.e. end. 
-        UserToSearch = UserToSearch[:-1]
-        UserToSearchChanged = True
-    elif ((Keystroke == pygame.K_RETURN) and (UserFromCardOrKeyboard == USER_FROM_CARD)):
-        #End of the string. Only relevant from card reader
-        UserFromCardValid = True
-    elif (KeystrokeIsValid(Keystroke)): 
-        UserToSearch += chr(Keystroke)
-        UserToSearchChanged = True
+    if (InputFromCardActive):
+        #Keycard so check if end of string yet. Reader sends CR at end of string
+        if (Keystroke == pygame.K_RETURN):
+            #CR so flag current data is from the card and is valid
+            InputFromCardValid = True
+        else:
+            #UserToSearch is only updated once the final CR is received from the card, and handled in "update"
+            InputFromCard = InputFromCard + chr(Keystroke)
+    elif (InputFromKeyboardActive):
+        #Keyboard so process backspace and characters
+        #Backspace 
+        if (Keystroke == pygame.K_BACKSPACE):
+            # get text input from 0 to -1 i.e. end. 
+            UserToSearch = UserToSearch[:-1]
+            UserToSearchChanged = True
+        elif (KeystrokeIsValidChar(Keystroke)): 
+            #Keyboard inputs need to update the search name as you type
+            InputFromKeyboard = InputFromKeyboard + chr(Keystroke)
+            UserToSearch = UserToSearch + chr(Keystroke)
+            UserToSearchChanged = True
 
 def ProcessIntervalTimerEvent():
     """Process the interval timers for the touch screen and card/tag timeout timers"""
-    global CheckInOutTimeoutClick
-    global CheckInOutTimeoutCard
+    global UnknownCardTimeout
+    global UserToSearch
+    global UserToSearchChanged
 
-    if (CheckInOutTimeoutClick > 0):
-        CheckInOutTimeoutClick = CheckInOutTimeoutClick - 1
-        print("CheckInOutTimeoutClick", CheckInOutTimeoutClick)
+    if (UnknownCardTimeout > 0):
+        UnknownCardTimeout = UnknownCardTimeout - 1
+        if (UnknownCardTimeout == 0):
+            #Ticked down to 0, so clear the text etc...
+            UserToSearch = ""
+            UserToSearchChanged = True
 
-    if (CheckInOutTimeoutCard > 0):
-        CheckInOutTimeoutCard = CheckInOutTimeoutCard - 1
-        print("CheckInOutTimeoutCard", CheckInOutTimeoutCard)
+
+#    global CheckInOutTimeoutClick
+#    global CheckInOutTimeoutCard
+#
+#    if (CheckInOutTimeoutClick > 0):
+#        CheckInOutTimeoutClick = CheckInOutTimeoutClick - 1
+#        print("CheckInOutTimeoutClick", CheckInOutTimeoutClick)
+#
+#    if (CheckInOutTimeoutCard > 0):
+#        CheckInOutTimeoutCard = CheckInOutTimeoutCard - 1
+#        print("CheckInOutTimeoutCard", CheckInOutTimeoutCard)
 
 
 def ProcessCursorBlinkTimerEvent():
@@ -643,7 +705,7 @@ def ProcessCursorBlinkTimerEvent():
                 
 def ProcessLoginSearchWindowEvents(event):
     """
-    Process events specifif to the search menu
+    Process events specific to the search menu
     """
     if ((event.type == pygame.KEYDOWN) and (event.unicode != '')): 
         ProcessKeyDown(ord(event.unicode))
@@ -686,7 +748,9 @@ def InitComPort():
         #Use the first com port found
         if (sys.platform == "win32"):
             ComPortDescription = ports[0]
-            ComPort = ComPortDescription.device
+            if (ComPort == ""):
+                #No COM port found in config, so use the first available
+                ComPort = ComPortDescription.device
         else:
             ComPort = "/dev/ttyAMA0"
         try:
@@ -705,28 +769,29 @@ def InitComPort():
         print("No serial ports found. Cannot connect to RFID interface.")
         SerialPortOpened = False
 
-def CheckCard():
-    """Checks if a card or tag has been presented to the card reader"""
-    global SerialPortOpened
-    global CheckInOutTimeoutCard
-    global TimeoutCardActive
+def CheckVCOMCard():
+    """
+    Checks if a card or tag has been presented to the VCOM card reader
+    """
+    global InputFromKeyboardActive
+    global InputFromCardActive
+    global InputFromCardValid
+    global InputFromCard
+    global UserToSearch
+    global UserToSearchChanged
 
     #If a serial port was opened then probably a serial port connected reader present (certainy in custom RaspPi, not necissarily on Windows)
     if (SerialPortOpened == True):
         CharctersInBuffer = SerialPort.in_waiting
         if (CharctersInBuffer > 16):
-            print(CharctersInBuffer, " characters in the UART buffer")
-            Card = SerialPort.readline().strip().decode('utf-8')[8:16]
-            print("Card ID = ", Card)
-            if (Card in MemberDictionary):
-                MemberData = MemberDictionary.get(Card)
-                MemberName = MemberData["Name"]
-                print("Card ID", Card, "belongs to ", MemberName)
-                TriggerNameUpdate(MemberName)
-                CheckInOutTimeoutCard = CHECKINOUTCARD_TIMEOUT
-                TimeoutCardActive =True
-            else:
-                print("Member for tag", Card, "not found")
+            #Strip off the loading 8x '0's
+            ID = SerialPort.readline().strip().decode('utf-8')
+            InputFromKeyboardActive = False
+            InputFromCardActive = True
+            InputFromCardValid = True
+            InputFromCard = ID
+            UserToSearch = ID
+            UserToSearchChanged = True
 
 def CheckInternetActive(url="http://www.google.com", timeout=5):
     """
@@ -887,6 +952,7 @@ def LoadConfig():
     global ConfigListTextColor
     global ConfigNameTextBackgroundColor
     global ConfigNameTextColor
+    global ComPort
 
     ConfigShowIP                  = True # Show network IP address in top left
     ConfigShowPorts               = True # List com ports available to terminal
@@ -902,6 +968,8 @@ def LoadConfig():
     CurrentLoggingSheetName = "Logging"
 
     CurrentPadLocation = ConfigDefaultPadLocation
+
+    ComPort = "COM3"
     
 def ProcessUpdates():
     """
@@ -911,18 +979,42 @@ def ProcessUpdates():
     global NameTextBox
     global NameTextChanged
     global NameTextBoxText
-    global UserFromCardOrKeyboard
     global UserToSearchChanged
+    global UserToSearch
+    global InputFromCardValid
+    global InputFromCard
+    global InputFromCardActive
+    global UnknownCardTimeout
+
+    if (InputFromCardValid):
+        #Card input has changed and is now valid
+        #Get the corresponding user name
+        if (len(InputFromCard) == 16):
+            #IDs from the 13MHz reader are 16 character hex numberswith 8 leading '0's so remove them
+            ID = InputFromCard[-8:]
+        elif (len(InputFromCard) == 10):
+            #IDs from 125KHz keyboard reader are 10 digit decimal numbers
+            ID = InputFromCard
+        #Get the member name
+        if (ID in MemberDictionary):
+            #ID is in the list so get the name
+            Member = MemberDictionary[ID]
+            MemberName = Member["Name"]
+            UserToSearch = MemberName
+        else:
+            #Member not found so let the user know
+            MemberName = "Unknown ID " + ID
+            UserToSearch = MemberName
+            UserToSearchChanged = True
+            UnknownCardTimeout = UNKNOWN_CARD_TIMEOUT
+        #Clear the card string and flags
+        InputFromCard = ""
+        InputFromCardValid = False
+        InputFromCardActive = False
+
 
     if (UserToSearchChanged == True):
-        if (UserFromCardValid == True):        
-            #In this case the user to search is the ID
-            MemberInfo = MemberDictionary[UserToSearch]
-            MemberName = MemberInfo["Name"]
-            #Revert back to assuming the keyboard for future input
-            UserFromCardOrKeyboard = USER_FROM_KEYBOARD
-        else:
-            MemberName = UserToSearch
+        MemberName = UserToSearch
         NameTextBoxText = MemberName
         NameTextChanged = True
         FilterDictionary(MemberName)
@@ -960,8 +1052,8 @@ ResizeWindow()
 running = True
   
 while running: 
-#    CheckCard()
     ProcessEvents()
+    CheckVCOMCard()
     ProcessUpdates()
     UpdateDisplay()
     # clock.tick(60) means that for every second at most 
