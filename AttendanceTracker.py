@@ -95,13 +95,6 @@ SplashFiles = []
 
 CursorBlinkState = False
 TextInputActive = True
-#Timeouts in 500ms ticks
-#Unknown card = 2 seconds
-UNKNOWN_CARD_TIMEOUT    = 2 * 2
-#Keybord checkin/out timeout = 5 seconds
-CHECKINOUTCLICK_TIMEOUT = 5 * 2
-#Card checkin/out timeout = 5 seconds
-CHECKINOUTCARD_TIMEOUT  = 5 * 2
 
 UnknownCardTimeout = 0
 
@@ -113,9 +106,10 @@ TimeoutClickClear = False #ToDo:
 TimeoutCardClear = False #ToDo:
 
 DisplayNeedUpdated = True
-ComPort = ""
+SerialPortName = ""
 SerialPort = ""
-SerialPortOpened = ""
+SerialPortOpened = False
+SerialPortExists = False
 
 MemberDictionary = {}
 MemberDictionaryLocal = {}
@@ -675,6 +669,7 @@ def ProcessIntervalTimerEvent():
     global UserToSearchChanged
 
     if (UnknownCardTimeout > 0):
+        print("Unknown card : ", UnknownCardTimeout)
         UnknownCardTimeout = UnknownCardTimeout - 1
         if (UnknownCardTimeout == 0):
             #Ticked down to 0, so clear the text etc...
@@ -732,11 +727,48 @@ def ProcessEvents():
         if ((CurrentMenu == MenuState.SEARCH) or (CurrentMenu == MenuState.CHECKINOUT)):
             ProcessLoginSearchWindowEvents(event)
 
-def InitComPort():
-    """Get a list of available COM ports and try to open the first one ready to receive card/tag data"""
-    global ComPort
+def OpenVCOM():
     global SerialPort
     global SerialPortOpened
+    global SerialPortName
+
+    if (SerialPortExists):
+        try:
+            SerialPort = serial.Serial(SerialPortName, 115200)
+            if (SerialPort.is_open):
+                SerialPortOpened = True
+                return True
+            else:
+                SerialPortOpened = False
+                return False
+    #    except:
+        except serial.SerialException as e:
+            print(f"Error opening serial port: {e}")
+            SerialPortOpened = False
+            return False
+    else:
+        return False
+    
+def CloseVCOM():
+    global SerialPort
+    global SerialPortOpened
+
+    if (SerialPortExists):
+        try:
+            SerialPort.close()
+            return True
+        except:
+            print(f"Error closing serial port: {e}")
+            SerialPortOpened = False
+            return False
+    else:
+        return False
+
+def InitSerialPort():
+    """Get a list of available COM ports and try to open the first one ready to receive card/tag data"""
+    global SerialPortName
+    global SerialPortOpened
+    global SerialPortExists
 
     ports = list(port_list.comports())
     if (ConfigShowPorts):
@@ -747,26 +779,22 @@ def InitComPort():
     if (len(ports) > 0):
         #Use the first com port found
         if (sys.platform == "win32"):
-            ComPortDescription = ports[0]
+            SerialPortDescription = ports[0]
+            if (SerialPortName == ""):
+                #No COM port found in config, so use the first available
+                SerialPortName = SerialPortDescription.device
+        else:
+            SerialPortDescription = ports[0]
             if (ComPort == ""):
                 #No COM port found in config, so use the first available
-                ComPort = ComPortDescription.device
-        else:
-            ComPort = "/dev/ttyAMA0"
-        try:
-            SerialPort = serial.Serial(ComPort, 115200)
-            if (SerialPort.is_open):
-                print("UART ", SerialPort.name, " with card reader opened correctly")
-                SerialPortOpened = True
-            else:
-                print("UART failed to connect to card reader !!!")
-                SerialPortOpened = False
-    #    except:
-        except serial.SerialException as e:
-            print(f"Error opening serial port: {e}")
-            SerialPortOpened = False
+                #ComPort = ComPortDescription.device
+                #If nothing in config then force to ttyAMA0
+                SerialPortName = "/dev/ttyAMA0"
+        SerialPortExists = True
+        SerialPortOpened = OpenVCOM()
     else:
         print("No serial ports found. Cannot connect to RFID interface.")
+        SerialPortExists = False
         SerialPortOpened = False
 
 def CheckVCOMCard():
@@ -779,19 +807,28 @@ def CheckVCOMCard():
     global InputFromCard
     global UserToSearch
     global UserToSearchChanged
+    global SerialPortExists
+    global SerialPortOpened
 
     #If a serial port was opened then probably a serial port connected reader present (certainy in custom RaspPi, not necissarily on Windows)
-    if (SerialPortOpened == True):
-        CharctersInBuffer = SerialPort.in_waiting
-        if (CharctersInBuffer > 16):
-            #Strip off the loading 8x '0's
-            ID = SerialPort.readline().strip().decode('utf-8')
-            InputFromKeyboardActive = False
-            InputFromCardActive = True
-            InputFromCardValid = True
-            InputFromCard = ID
-            UserToSearch = ID
-            UserToSearchChanged = True
+    if (SerialPortOpened):
+        try:
+            CharctersInBuffer = SerialPort.in_waiting
+            if (CharctersInBuffer > 16):
+                #Strip off the loading 8x '0's
+                ID = SerialPort.readline().strip().decode('utf-8')
+                InputFromKeyboardActive = False
+                InputFromCardActive = True
+                InputFromCardValid = True
+                InputFromCard = ID
+                UserToSearch = ID
+                UserToSearchChanged = True
+        except:
+            #Something happened to the port since we opened it !!
+            print("Serial port has disappeared !!!")
+            SerialPortExists = False
+            SerialPortOpened = False
+
 
 def CheckInternetActive(url="http://www.google.com", timeout=5):
     """
@@ -952,7 +989,10 @@ def LoadConfig():
     global ConfigListTextColor
     global ConfigNameTextBackgroundColor
     global ConfigNameTextColor
-    global ComPort
+    global SerialPortName
+    global UNKNOWN_CARD_TIMEOUT
+    global CHECKINOUTCLICK_TIMEOUT
+    global CHECKINOUTCARD_TIMEOUT
 
     ConfigShowIP                  = True # Show network IP address in top left
     ConfigShowPorts               = True # List com ports available to terminal
@@ -966,10 +1006,15 @@ def LoadConfig():
     ConfigNameTextColor           = pygame.Color('red')
 
     CurrentLoggingSheetName = "Logging"
-
     CurrentPadLocation = ConfigDefaultPadLocation
-
-    ComPort = "COM3"
+    SerialPortName = "COM3"
+    #Timeouts in 500ms ticks
+    #Unknown card = 2 seconds
+    UNKNOWN_CARD_TIMEOUT    = 2 * 2
+    #Keybord checkin/out timeout = 5 seconds
+    CHECKINOUTCLICK_TIMEOUT = 5 * 2
+    #Card checkin/out timeout = 5 seconds
+    CHECKINOUTCARD_TIMEOUT  = 5 * 2
     
 def ProcessUpdates():
     """
@@ -1025,7 +1070,7 @@ def ProcessUpdates():
 pygame.init() 
 clock = pygame.time.Clock()
 LoadConfig()
-InitComPort()
+InitSerialPort()
 
 if (ConfigUseGoogle):
     InitGoogle()
