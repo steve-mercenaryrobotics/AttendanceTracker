@@ -73,7 +73,6 @@ ButtonHeight = 90
 ButtonCurve = 25
 ButtonThickness = 0
 
-
 UserToSearch = ""
 UserToSearchChanged = True
 
@@ -97,6 +96,7 @@ CursorBlinkState = False
 TextInputActive = True
 
 UnknownCardTimeout = 0
+KeyboardEntryTimeout = 0
 
 CheckInOutTimeoutClick = 0 #ToDo:
 CheckInOutTimeoutCard = 0 #ToDo:
@@ -621,6 +621,7 @@ def ProcessKeyDown(Keystroke):
     global UserToSearchChanged
     global UserToSearch
     global InputFromCardValid
+    global KeyboardEntryTimeout
 
     #We detect where the user information is coming from here
     #If neither keyboard or card then user to search should also be blank
@@ -639,6 +640,7 @@ def ProcessKeyDown(Keystroke):
     elif (KeystrokeIsValidChar(Keystroke)):
         #Wasn't a number (nor CR) so must be from regular keyboard
         InputFromKeyboardActive = True
+        KeyboardEntryTimeout = KEYBOARD_ENTRY_TIMEOUT
 
     #Depending on whether keystroke came from the keyboard
     if (InputFromCardActive):
@@ -665,16 +667,34 @@ def ProcessKeyDown(Keystroke):
 def ProcessIntervalTimerEvent():
     """Process the interval timers for the touch screen and card/tag timeout timers"""
     global UnknownCardTimeout
+    global KeyboardEntryTimeout
     global UserToSearch
     global UserToSearchChanged
+    global InputFromKeyboard
+    global InputFromKeyboardActive
+    global InputFromCard
+    global InputFromCardActive
 
     if (UnknownCardTimeout > 0):
         print("Unknown card : ", UnknownCardTimeout)
         UnknownCardTimeout = UnknownCardTimeout - 1
         if (UnknownCardTimeout == 0):
             #Ticked down to 0, so clear the text etc...
+            InputFromCard = ""
+            InputFromCardActive = False
             UserToSearch = ""
             UserToSearchChanged = True
+    
+    if ((KeyboardEntryTimeout > 0) and (InputFromKeyboardActive)):
+        print("Keyboard entry : ", KeyboardEntryTimeout)
+        KeyboardEntryTimeout = KeyboardEntryTimeout - 1
+        if (KeyboardEntryTimeout == 0):
+            #Ticked down so reset the keyboard entry info
+            InputFromKeyboard = ""
+            InputFromKeyboardActive = False
+            UserToSearch = ""
+            UserToSearchChanged = True
+            UnknownCardTimeout = 0
 
 
 #    global CheckInOutTimeoutClick
@@ -993,6 +1013,7 @@ def LoadConfig():
     global UNKNOWN_CARD_TIMEOUT
     global CHECKINOUTCLICK_TIMEOUT
     global CHECKINOUTCARD_TIMEOUT
+    global KEYBOARD_ENTRY_TIMEOUT
 
     ConfigShowIP                  = True # Show network IP address in top left
     ConfigShowPorts               = True # List com ports available to terminal
@@ -1015,6 +1036,8 @@ def LoadConfig():
     CHECKINOUTCLICK_TIMEOUT = 5 * 2
     #Card checkin/out timeout = 5 seconds
     CHECKINOUTCARD_TIMEOUT  = 5 * 2
+    #Keyboard inactivity timeout = 5 seconds
+    KEYBOARD_ENTRY_TIMEOUT = 5 * 2
     
 def ProcessUpdates():
     """
