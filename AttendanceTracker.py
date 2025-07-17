@@ -30,6 +30,16 @@ import gspread
 from google.oauth2.service_account import Credentials
 import time
 
+ShowKeyboard = True
+KBFontSize = 48
+KeyCapImg = ''
+KeyCapFont = ''
+KBBorder = ''
+KBSpacing = ''
+KeyCapScaledImg = ''
+KeyCapScaledImg2x = ''
+VirtualKeyPressed = -1
+
 ConfigShowIP    = True
 ConfigShowPorts = True
 ConfigDefaultPadLocation = "Workshop"
@@ -41,7 +51,7 @@ ConfigGoogleMemberUpdateTime = 20
 ConfigListTextColor = pygame.Color('darkred')
 ConfigNameTextBackgroundColor = pygame.Color('lightskyblue3')
 ConfigNameTextColor = pygame.Color('red')
-
+ConfigKeyboardAlpha = 180
 
 CurrentLoggingSheetName = "Logging"
 
@@ -62,6 +72,7 @@ WindowWidth  = 1024
 WindowHeight = 600
 
 MemberActivityFilename = "Activity.log"
+CWD = os.getcwd()
 
 #BackgroundColor = (100,255,255)
 BackgroundColor = (255,255,255)
@@ -91,7 +102,7 @@ Photo2Display = 0
 PhotoState = -100
 PhotoEffectSpeed = 6
 SplashFiles = []
-
+KeyCapImg = ""
 CursorBlinkState = False
 TextInputActive = True
 
@@ -367,6 +378,8 @@ def UpdateDisplay():
         ShowPhoto()
         if (ConfigShowIP):
             ShowIP()
+        if (ShowKeyboard):
+            RenderKeyboard()
         #pygame.display.update()    
         pygame.display.flip()
         #Clear the buffer ready for the next renderings
@@ -1009,6 +1022,7 @@ def LoadConfig():
     global ConfigListTextColor
     global ConfigNameTextBackgroundColor
     global ConfigNameTextColor
+    global ConfigKeyboardAlpha
     global SerialPortName
     global UNKNOWN_CARD_TIMEOUT
     global CHECKINOUTCLICK_TIMEOUT
@@ -1025,6 +1039,7 @@ def LoadConfig():
     ConfigListTextColor           = pygame.Color('darkred')
     ConfigNameTextBackgroundColor = pygame.Color('lightskyblue3')
     ConfigNameTextColor           = pygame.Color('red')
+    ConfigKeyboardAlpha           = 200
 
     CurrentLoggingSheetName = "Logging"
     CurrentPadLocation = ConfigDefaultPadLocation
@@ -1088,6 +1103,60 @@ def ProcessUpdates():
         FilterDictionary(MemberName)
         UserToSearchChanged = False
 
+def blit_alpha(target, source, location, opacity):
+        x = location[0]
+        y = location[1]
+        temp = pygame.Surface((source.get_width(), source.get_height())).convert()
+        temp.blit(target, (-x, -y))
+        temp.blit(source, (0, 0))
+        temp.set_alpha(opacity)        
+        target.blit(temp, location)
+
+def RenderKeyboard():
+    Index = 0
+    for y in range(6):
+        BYC = KBBorder + (y * KBSpacing) + (KBSpacing / 2) # Button center Y
+        for x in range(5):
+            BXC = KBBorder + (x * KBSpacing) + (KBSpacing / 2) # Button center X
+            if (Index < 26):
+                Character = chr(65 + Index)
+            else:
+                Character = "SPC"
+            
+            if ((Index == 25) or (Index == 26)):
+                BXC = BXC + KBSpacing
+            if (Index <= 26):
+                if (Index == VirtualKeyPressed):
+                    Alpha = 255
+                    KeyColor = pygame.Color('blue')
+                else:
+                    Alpha = ConfigKeyboardAlpha
+                    KeyColor = pygame.Color('black')
+                if (Index == 26):
+                    blit_alpha(screen, KeyCapScaledImg2x, (BXC - (KeyCapScaledImg.get_width() / 2), BYC - (KeyCapScaledImg.get_height() / 2)), Alpha)
+                    TXO = KBSpacing / 2
+                else:
+                    blit_alpha(screen, KeyCapScaledImg, (BXC - (KeyCapScaledImg.get_width() / 2), BYC - (KeyCapScaledImg.get_height() / 2)), Alpha)
+                    TXO = 0
+                TextImg = KeyCapFont.render(Character, True, KeyColor)
+                blit_alpha(screen, TextImg, (BXC - (TextImg.get_width() / 2) + TXO, BYC - (TextImg.get_height() / 2)), Alpha)
+                Index = Index + 1
+
+def InitVirtualKeyboard():
+    global KeyCapImg
+    global KeyCapFont
+    global KBBorder
+    global KBSpacing
+    global KeyCapScaledImg
+    global KeyCapScaledImg2x
+
+    KeyCapImg = pygame.image.load(CWD + "/Assets/KeyCap1.png")
+    KeyCapFont = pygame.font.SysFont('Comic Sans MS', KBFontSize)
+    KBBorder = 30
+    KBSpacing = (int)(((WindowWidth / 2) - (2 * KBBorder)) / 5)
+    KeyCapScaledImg = pygame.transform.smoothscale(KeyCapImg, (KBSpacing, KBSpacing))
+    KeyCapScaledImg2x = pygame.transform.smoothscale(KeyCapImg, (KBSpacing * 2, KBSpacing))
+
 ###################################################################################################
 
 pygame.init() 
@@ -1116,6 +1185,7 @@ PhotoFilename = "Splash/" + random.choice(SplashFiles)
 screen.fill(BackgroundColor) 
 LoadPhoto(PhotoFilename)
 ResizeWindow()
+InitVirtualKeyboard()
 
 running = True
   
