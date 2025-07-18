@@ -37,8 +37,10 @@ KeyCapFont = ''
 KBBorder = ''
 KBSpacing = ''
 KeyCapScaledImg = ''
-KeyCapScaledImg2x = ''
+KeyCapScaledImg3x = ''
 VirtualKeyPressed = -1
+VirtualKeyPressedTimer = 0
+KeyboardRect = 0
 
 ConfigShowIP    = True
 ConfigShowPorts = True
@@ -115,6 +117,9 @@ TimeoutCardActive = False #ToDo:
 TimeoutClickActive = False #ToDo:
 TimeoutClickClear = False #ToDo:
 TimeoutCardClear = False #ToDo:
+
+MouseDownPos = (0, 0)
+MouseClicked = False
 
 DisplayNeedUpdated = True
 SerialPortName = ""
@@ -626,7 +631,10 @@ def ToUpper(Keystroke):
     return ord(KeyChar.upper())
 
 def ProcessKeyDown(Keystroke):
-    """Process the keyboard events and update the text accordingly"""
+    """
+    Process the keyboard events and update the text accordingly
+    Keystrokes can also come from the virtual keyboard
+    """
     global InputFromCardActive
     global InputFromCard
     global InputFromKeyboardActive
@@ -740,8 +748,12 @@ def ProcessLoginSearchWindowEvents(event):
     elif (event.type == CURSOR_BLINK_TIMER_EVENT): 
         ProcessCursorBlinkTimerEvent()
     
-#    elif event.type == pygame.MOUSEBUTTONDOWN: 
-#        ProcessMouseDown(event)
+def ProcessMouseDown(event):
+    global MouseDownPos
+    global MouseClicked
+
+    MouseDownPos = event.pos
+    MouseClicked = True
 
 def ProcessGeneralEvents(event):
     """Process general events like timers etc..."""
@@ -750,6 +762,9 @@ def ProcessGeneralEvents(event):
         running = False
     elif event.type == INTERVAL_TIMER_EVENT: 
         ProcessIntervalTimerEvent()
+    elif event.type == pygame.MOUSEBUTTONDOWN: 
+        #Mouse down needs to be globally monitored since it could be used on any 'screen'
+        ProcessMouseDown(event)
 
 def ProcessEvents():
     """
@@ -1054,6 +1069,27 @@ def LoadConfig():
     #Keyboard inactivity timeout = 5 seconds
     KEYBOARD_ENTRY_TIMEOUT = 5 * 2
     
+def ProcessVirtualKeyboardClick():
+    global MouseClicked
+    global VirtualKeyPressed
+    global VirtualKeyPressedTimer
+
+    Column = (int)((MouseDownPos[0] - KBBorder) / KBSpacing)
+    Row = (int)((MouseDownPos[1] - KBBorder) / KBSpacing)
+    Index = (Row * 5) + Column
+    if (Index < 26):
+        Character = Index + 65
+        VirtualKeyPressed = Index
+    elif (Index == 29):
+        Character = pygame.K_BACKSPACE
+        VirtualKeyPressed = 28
+    else:
+        Character = 32
+        VirtualKeyPressed = 27
+    VirtualKeyPressedTimer = 10
+    MouseClicked = False
+    ProcessKeyDown(Character)
+
 def ProcessUpdates():
     """
     Process anything that needs updating
@@ -1068,6 +1104,17 @@ def ProcessUpdates():
     global InputFromCard
     global InputFromCardActive
     global UnknownCardTimeout
+    global VirtualKeyPressedTimer
+    global VirtualKeyPressed
+
+    if (VirtualKeyPressedTimer > 0):
+        VirtualKeyPressedTimer = VirtualKeyPressedTimer - 1
+        if (VirtualKeyPressedTimer == 0):
+            VirtualKeyPressed = -1
+
+    if (ShowKeyboard and MouseClicked and KeyboardRect.collidepoint(MouseDownPos)):
+        #If the keyboard is visible and Mouse clicked in the keyboard region then process accordingly
+        ProcessVirtualKeyboardClick()
 
     if (InputFromCardValid):
         #Card input has changed and is now valid
@@ -1118,29 +1165,33 @@ def RenderKeyboard():
         BYC = KBBorder + (y * KBSpacing) + (KBSpacing / 2) # Button center Y
         for x in range(5):
             BXC = KBBorder + (x * KBSpacing) + (KBSpacing / 2) # Button center X
+            #Set the character to display and nudge the position if SPC or DEL
             if (Index < 26):
                 Character = chr(65 + Index)
-            else:
-                Character = "SPC"
-            
-            if ((Index == 25) or (Index == 26)):
+            elif (Index == 26):#"SPC" is 3x wide button
+                Character = ""            
                 BXC = BXC + KBSpacing
-            if (Index <= 26):
-                if (Index == VirtualKeyPressed):
-                    Alpha = 255
-                    KeyColor = pygame.Color('blue')
-                else:
-                    Alpha = ConfigKeyboardAlpha
-                    KeyColor = pygame.Color('black')
-                if (Index == 26):
-                    blit_alpha(screen, KeyCapScaledImg2x, (BXC - (KeyCapScaledImg.get_width() / 2), BYC - (KeyCapScaledImg.get_height() / 2)), Alpha)
-                    TXO = KBSpacing / 2
-                else:
-                    blit_alpha(screen, KeyCapScaledImg, (BXC - (KeyCapScaledImg.get_width() / 2), BYC - (KeyCapScaledImg.get_height() / 2)), Alpha)
-                    TXO = 0
+            elif (Index == 27):
+                Character = "<"
+                BXC = BXC + KBSpacing + KBSpacing #Delete needs to be moved past the "SPC"
+            #If key clicked then highlight it
+            if (Index == VirtualKeyPressed):
+                Alpha = 255
+                KeyColor = pygame.Color('blue')
+            else:
+                Alpha = ConfigKeyboardAlpha
+                KeyColor = pygame.Color('black')
+            #Actually render the keycap
+            if (Index == 26):#SPC
+                #"SPC" is 3x wide but BXC is the center of the 3x, so correct start location accordingly
+                blit_alpha(screen, KeyCapScaledImg3x, (BXC - (KeyCapScaledImg.get_width() / 2) - KBSpacing, BYC - (KeyCapScaledImg.get_height() / 2)), Alpha)
+            elif (Index < 28):
+                blit_alpha(screen, KeyCapScaledImg, (BXC - (KeyCapScaledImg.get_width() / 2), BYC - (KeyCapScaledImg.get_height() / 2)), Alpha)
+            #Now add the character
+            if (Index < 28):
                 TextImg = KeyCapFont.render(Character, True, KeyColor)
-                blit_alpha(screen, TextImg, (BXC - (TextImg.get_width() / 2) + TXO, BYC - (TextImg.get_height() / 2)), Alpha)
-                Index = Index + 1
+                blit_alpha(screen, TextImg, (BXC - (TextImg.get_width() / 2), BYC - (TextImg.get_height() / 2)), Alpha)
+            Index = Index + 1
 
 def InitVirtualKeyboard():
     global KeyCapImg
@@ -1148,14 +1199,17 @@ def InitVirtualKeyboard():
     global KBBorder
     global KBSpacing
     global KeyCapScaledImg
-    global KeyCapScaledImg2x
+    global KeyCapScaledImg3x
+    global KeyboardRect
 
     KeyCapImg = pygame.image.load(CWD + "/Assets/KeyCap1.png")
     KeyCapFont = pygame.font.SysFont('Comic Sans MS', KBFontSize)
     KBBorder = 30
     KBSpacing = (int)(((WindowWidth / 2) - (2 * KBBorder)) / 5)
     KeyCapScaledImg = pygame.transform.smoothscale(KeyCapImg, (KBSpacing, KBSpacing))
-    KeyCapScaledImg2x = pygame.transform.smoothscale(KeyCapImg, (KBSpacing * 2, KBSpacing))
+    KeyCapScaledImg3x = pygame.transform.smoothscale(KeyCapImg, (KBSpacing * 3, KBSpacing))
+    #Set bounding box for keyboard
+    KeyboardRect = pygame.Rect([KBBorder, KBBorder, (5 * KBSpacing), (6 * KBSpacing)])
 
 ###################################################################################################
 
@@ -1194,6 +1248,4 @@ while running:
     CheckVCOMCard()
     ProcessUpdates()
     UpdateDisplay()
-    # clock.tick(60) means that for every second at most 
-    # 60 frames should be passed. 
-    clock.tick(30) 
+    clock.tick(30)
