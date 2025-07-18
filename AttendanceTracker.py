@@ -841,7 +841,7 @@ def InitSerialPort():
                 SerialPortName = SerialPortDescription.device
         else:
             SerialPortDescription = ports[0]
-            if (ComPort == ""):
+            if (SerialPortName == ""):
                 #No COM port found in config, so use the first available
                 #ComPort = ComPortDescription.device
                 #If nothing in config then force to ttyAMA0
