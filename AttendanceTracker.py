@@ -44,6 +44,7 @@ KeyboardRect = 0
 
 ConfigShowIP    = True
 ConfigShowPorts = True
+ConfigShowTime  = True
 ConfigDefaultPadLocation = "Workshop"
 CurrentPadLocation = "Workshop"
 ConfigUseGoogle = True
@@ -302,8 +303,13 @@ def ShowIP():
     IPfont = pygame.font.Font(None, 12)
     txt_surface = IPfont.render(CurrentIP, True, pygame.Color('black'))
     screen.blit(txt_surface, (3, 3))
-    CurrentIP
 
+def ShowTime():
+    Timefont = pygame.font.Font(None, 35)
+    CurrentTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    txt_surface = Timefont.render(CurrentTime, True, pygame.Color('black'))
+    screen.blit(txt_surface, ((WindowWidth / 4) - (txt_surface.get_width() / 2), 3))
+    
 def DrawBox(Box, BoxColor, BorderThickness, BorderColor):
     """Render a box.
     Parameters:
@@ -385,6 +391,8 @@ def UpdateDisplay():
             ShowIP()
         if (ShowKeyboard):
             RenderKeyboard()
+        if (ConfigShowTime):
+            ShowTime()
         #pygame.display.update()    
         pygame.display.flip()
         #Clear the buffer ready for the next renderings
@@ -1026,6 +1034,7 @@ def InitGoogle():
 def LoadConfig():
     """Load settings from the config.txt file"""
     global ConfigShowIP
+    global ConfigShowTime
     global ConfigShowPorts
     global ConfigUseGoogle
     global ConfigGoogleSheetID
@@ -1045,6 +1054,7 @@ def LoadConfig():
     global KEYBOARD_ENTRY_TIMEOUT
 
     ConfigShowIP                  = True # Show network IP address in top left
+    ConfigShowTime                = True # Display the data/time at the bottom
     ConfigShowPorts               = True # List com ports available to terminal
     ConfigDefaultPadLocation      = "Workshop" #Default location for the pad
     ConfigUseGoogle               = True #Talk to Google Sheets if possible
