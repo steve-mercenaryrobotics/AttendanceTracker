@@ -839,6 +839,7 @@ def InitSerialPort():
             if (SerialPortName == ""):
                 #No COM port found in config, so use the first available
                 SerialPortName = SerialPortDescription.device
+                SerialPortName = "COM3"
         else:
             SerialPortDescription = ports[0]
             if (SerialPortName == ""):
@@ -1068,7 +1069,7 @@ def LoadConfig():
 
     CurrentLoggingSheetName = "Logging"
     CurrentPadLocation = ConfigDefaultPadLocation
-    SerialPortName = "COM3"
+    #SerialPortName = "COM3"
     #Timeouts in 500ms ticks
     #Unknown card = 2 seconds
     UNKNOWN_CARD_TIMEOUT    = 2 * 2
