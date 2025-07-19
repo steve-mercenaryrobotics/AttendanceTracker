@@ -1093,10 +1093,10 @@ def ProcessVirtualKeyboardClick():
         VirtualKeyPressed = Index
     elif (Index == 29):
         Character = pygame.K_BACKSPACE
-        VirtualKeyPressed = 28
+        VirtualKeyPressed = 27
     else:
         Character = 32
-        VirtualKeyPressed = 27
+        VirtualKeyPressed = 26
     VirtualKeyPressedTimer = 10
     MouseClicked = False
     ProcessKeyDown(Character)
@@ -1221,6 +1221,7 @@ def InitVirtualKeyboard():
     KeyCapScaledImg3x = pygame.transform.smoothscale(KeyCapImg, (KBSpacing * 3, KBSpacing))
     #Set bounding box for keyboard
     KeyboardRect = pygame.Rect([KBBorder, KBBorder, (5 * KBSpacing), (6 * KBSpacing)])
+    pygame.time.set_timer(CURSOR_BLINK_TIMER_EVENT, 500)
 
 ###################################################################################################
 

@@ -1,8 +1,10 @@
-ShowPi = false;
-ShowUSBPlug = false;
+ShowPi        = false;
+ShowUSBPlug   = false;
 ShowCaseUpper = true;
 ShowCaseLower = true;
-ShowTypeCCap = true;
+ShowTypeCCap  = true;
+AddVesa       = true;
+AddLED        = true;
 
 module __Stop__(){};
 
@@ -55,6 +57,11 @@ $ShellVOffset = -1;
 $BuzzerX = 54;
 $BuzzerZ = -3;
 $BuzzerD = 12;
+
+$VesaPillarD = 10;
+$VesaPillarHoleD = 5;
+$VesaPillarH = 9;
+
 
 module RoundedBlock($XDim = 10, $YDim = 10, $ZDim = 10, $D1 = 0, $D2 = 0, $D3 = 0, $D4 = 0, $D5 = 0, $D6 = 0, $D7 = 0, $D8 = 0)
 {
@@ -379,22 +386,22 @@ module AttendanceTrackerShellV2()
       translate([74.2 - 10.2 + 47, -60, .5])
         cube([15, 20, 17.6], center = true);
       //Type C socket
-        //Inner with lip
-      translate([-1 - 4, -24.5, -15])
+      //Inner with lip
+      translate([-1 - 4, -14.5, -15])
         cube([55, 15.1, 10], center = true);
        //Outer opening for cap
-      translate([-1 - 4, -24.5, -19.8])
+      translate([-1 - 4, -14.5, -19.8])
         cube([55, 16.1, 10], center = true);
       //Type-C opening clip grooves
-      translate([-1 - 4, -24.5, -14.5])
+      translate([-1 - 4, -14.5, -14.5])
         cube([55, 18.1, 1], center = true);
       //Cable trench
-      translate([19.5, -56.5, -15.0])
+      translate([19.5, -46.5, -15.0])
         rotate(90, [1, 0, 0])
           cylinder(d = 6, h = 50, $fn = 40, center = true);
       //Pi 5 PCB clearance
       translate([92, -60, -7.5])
-      cube([60, 10, 2], center = true);
+        cube([60, 10, 2], center = true);
       //Cooling openings Left
       for (i = [-3:4])
         translate([$TotalWidthV2 / 2, (i * 6) - 2, 3])
@@ -410,24 +417,55 @@ module AttendanceTrackerShellV2()
       translate([-38, -$ShellVOffset, $ThicknessV2 / 2])
         PanelMountHoles($HoleD = 9, $Height = 2.2, $center = false, $fn = 50);
       //Buzzer opening
-      translate([$BuzzerX, -$TotalHeightV2 / 2, $BuzzerZ])
+      translate([$BuzzerX, -$TotalHeightV2 / 2, $BuzzerZ + 3.2])
         rotate(90, [1, 0, 0])
           cylinder(d = 3, h = 20, center = true, $fn = 30);
-      translate([$BuzzerX, (-$TotalHeightV2 / 2) + 1.2, $BuzzerZ])
+      translate([$BuzzerX, (-$TotalHeightV2 / 2) + 1.2, $BuzzerZ + 3.2])
         rotate(-90, [1, 0, 0])
           cylinder(d = 10, h = 20, $fn = 30);
+      //Vesa mount screw openings
+      if (AddVesa)
+      {
+        translate([0, 0, -($TotalThicknessV2 / 2) + .1])
+        {
+          PanelMountHoles($MountHSpacing = 100, $MountVSpacing = 100, $HoleD = 4.2, $Height = 20, $center = true);
+          PanelMountHoles($MountHSpacing = 75, $MountVSpacing = 75, $HoleD = 4.2, $Height = 20, $center = true);
+        }
+      }
+      if (AddLED)
+      {
+        translate([60, 65, 0])
+          rotate(90, [1, 0, 0])
+            cylinder(d = 5, h = 10, $fn = 30, center = true);
+      }
     }
-
-    translate([-30, -($HeightV2 / 2) + 40, -7.5])
+    //Type-C Cable cavity block
+    translate([-30, -($HeightV2 / 2) + 50, -7.5])
       rotate(90, [0, 0, 1])
         TypeCBlock();
-
+    //Vesa mount pillars
+    if (AddVesa)
+    {
+      translate([0, 0, -($TotalThicknessV2 / 2) + .1])
+      {
+        difference()
+        {
+          PanelMountHoles($MountHSpacing = 100, $MountVSpacing = 100, $HoleD = $VesaPillarD, $Height = $VesaPillarH, $center = false);
+          PanelMountHoles($MountHSpacing = 100, $MountVSpacing = 100, $HoleD = $VesaPillarHoleD, $Height = $VesaPillarH + 1, $center = false);
+        }
+        difference()
+        {
+          PanelMountHoles($MountHSpacing = 75, $MountVSpacing = 75, $HoleD = $VesaPillarD, $Height = $VesaPillarH, $center = false);
+          PanelMountHoles($MountHSpacing = 75, $MountVSpacing = 75, $HoleD = $VesaPillarHoleD, $Height = $VesaPillarH + 1, $center = false);
+        }
+      }
+    }
     
   }
 
   //Buzzer mount
 
-      translate([38 + $BuzzerX, (-$TotalHeightV2 / 2) + 1.2, $BuzzerZ - 3.2])
+      translate([38 + $BuzzerX, (-$TotalHeightV2 / 2) + 1.2, $BuzzerZ])
         rotate(-90, [1, 0, 0])
           difference()
           {
@@ -435,20 +473,20 @@ module AttendanceTrackerShellV2()
             {
               cylinder(d = 15, h = 6, $fn = 50);
               translate([0, -$BuzzerZ + 7, 3])
-              cube([15, 0.01, 6], center = true);
+                cube([15, 0.01, 6], center = true);
             }
             cylinder(d = $BuzzerD, h = 20, $fn = 50);
           }
 
   //LCD supports
-  translate([0, 0, (-$ThicknessV2 / 2) - 3.2 - $WallV2])
+  translate([0, 0, (-$ThicknessV2 / 2) - 3.18 - $WallV2])
     difference()
     {
       PanelMountHoles($HoleD = 10, $Height = 18.9, $center = false, $fn = 50);
       PanelMountHoles($HoleD = 2.7, $Height = 19, $center = false, $fn = 50);
     }
   //RP5 stuff
-  translate([130, -16.7 + 4, (-$ThicknessV2 / 2) - 3.2 - $WallV2])
+  translate([130, -16.7 + 4, (-$ThicknessV2 / 2) - 3.18 - $WallV2])
   {
     //RP5 supports
     difference()
