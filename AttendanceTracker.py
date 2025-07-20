@@ -121,8 +121,10 @@ TimeoutCardClear = False #ToDo:
 
 MouseDownPos = (0, 0)
 MouseClicked = False
+MouseUpPos = (0, 0)
+MouseReleased = False
 
-DisplayNeedUpdated = True
+DisplayNeedUpdated = True #ToDo: Currently no optimizations so update/redraw 30 times per second
 SerialPortName = ""
 SerialPort = ""
 SerialPortOpened = False
@@ -160,8 +162,6 @@ GoogleStatusText = {
 }
 
 CurrentUserStatus = UserStatus.ERROR
-CurrentUserID = ""
-CurrentUserName = ""
 
 CURSOR_BLINK_TIMER_EVENT = pygame.USEREVENT + 1
 INTERVAL_TIMER_EVENT = pygame.USEREVENT + 2
@@ -362,11 +362,23 @@ def DrawTextInputBox(Bounds, Text, TextColor, BackgroundColor, BorderColor, Bord
     screen.blit(txt_surface, (Bounds[0] + 5, Bounds[1] + 5))
 
     
-def DisplaySearchScreen(Names):
+def DisplaySearch(Names):
     """Render the search window, populating the member name list box"""
 #    screen.fill(BackgroundColor) 
     DrawTextInputBox(NameTextBoxRect, NameTextBoxText, ConfigNameTextColor, ConfigNameTextBackgroundColor, 'black', 2)
     DrawListBox(NameListRect, Names, ConfigListTextColor)
+
+def DisplayCheckInOut():
+    """
+    Display the Check in and Check out buttons
+    """
+    DisplaySearch(FilteredMembersNames)
+    if (CurrentUserStatus == UserStatus.CHECKOUT):#Note: The status is really "what was the last action?"
+        DrawButton(CheckInButton, "Check In", 'black', 'gray')
+        DrawButton(CheckOutButton, "Check Out", 'lightgray', 'gray')
+    elif (CurrentUserStatus == UserStatus.CHECKIN):
+        DrawButton(CheckInButton, "Check In", 'lightgray', 'gray')
+        DrawButton(CheckOutButton, "Check Out", 'black', 'gray')
 
 def UpdateDisplay():
     """
@@ -376,15 +388,9 @@ def UpdateDisplay():
     if (DisplayNeedUpdated):
         #Depending on what the current dislpay state is...
         if (CurrentMenu == MenuState.SEARCH):
-            DisplaySearchScreen(FilteredMembersNames)
+            DisplaySearch(FilteredMembersNames)
         elif (CurrentMenu == MenuState.CHECKINOUT):
-            DisplaySearchScreen(FilteredMembersNames)
-            if (CurrentUserStatus == UserStatus.CHECKEDOUT):
-                DrawButton(CheckInButton, "Check In", 'black', 'gray')
-                DrawButton(CheckOutButton, "Check Out", 'lightgray', 'gray')
-            elif (CurrentUserStatus == UserStatus.CHECKEDIN):
-                DrawButton(CheckInButton, "Check In", 'lightgray', 'gray')
-                DrawButton(CheckOutButton, "Check Out", 'black', 'gray')
+            DisplayCheckInOut()
         #Always show a picture
         ShowPhoto()
         if (ConfigShowIP):
@@ -572,28 +578,6 @@ def FindGoogleIDRow(ID):
     #If we reach here then a fatal error has occured!!!
     print("Serious Error !!!")
  
-def UpdateCurrentUserLog(Action):
-    """Update the current user Action in the tracking databases.
-    Additionally update the Google sheet if the Google connection is active.
-    ToDo : If Google is NOT active then we need to log the necessary updates.
-    Parameters:
-        Status (UserStatus.): ERROR, CREATED, CHECKEDIN, CHECKEDOUT, DISABLED.
-    """
-    #ToDo : Everything. This is completely wrong at the moment
-    StatusText = UserStatusText[Status]
-    CurrentDataTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    #Append action to file
-    m = open(CurrentUserActivityFilename, "a")
-    m.write(CurrentDataTime + "," + CurrentEvent + "," + StatusText + "\n")
-    m.close()
-    if (GoogleConnectionGood):
-        #Update the Members Google sheet
-        Row = FindGoogleIDRow(CurrentUserID) 
-        StatusText = GoogleStatusText[Status]
-        GoogleMembersSheet.update_cell(Row,GOOGLE_INOUT_COL, StatusText)
-        #Then update the individual member tracking
-        #ToDo : 
-
 def SetWaitingPhoto():
     PhotoFilename = "Splash/" + random.choice(SplashFiles)
     LoadPhoto(PhotoFilename)
@@ -666,7 +650,7 @@ def ProcessKeyDown(Keystroke):
             InputFromKeyboardActive = False
             UserToSearch = ""
             UserToSearchChanged = True
-    elif (KeystrokeIsValidChar(Keystroke)):
+    elif (KeystrokeIsValidChar(Keystroke) or (Keystroke == pygame.K_BACKSPACE)):
         #Wasn't a number (nor CR) so must be from regular keyboard
         InputFromKeyboardActive = True
         KeyboardEntryTimeout = KEYBOARD_ENTRY_TIMEOUT
@@ -694,7 +678,9 @@ def ProcessKeyDown(Keystroke):
             UserToSearchChanged = True
 
 def ProcessIntervalTimerEvent():
-    """Process the interval timers for the touch screen and card/tag timeout timers"""
+    """
+    Process the interval timers for the touch screen and card/tag timeout timers
+    """
     global UnknownCardTimeout
     global KeyboardEntryTimeout
     global UserToSearch
@@ -703,6 +689,7 @@ def ProcessIntervalTimerEvent():
     global InputFromKeyboardActive
     global InputFromCard
     global InputFromCardActive
+    global CurrentMenu
 
     if (UnknownCardTimeout > 0):
         print("Unknown card : ", UnknownCardTimeout)
@@ -724,6 +711,9 @@ def ProcessIntervalTimerEvent():
             UserToSearch = ""
             UserToSearchChanged = True
             UnknownCardTimeout = 0
+            #If on the checkin/out screen then also revert back to search
+            if (CurrentMenu == MenuState.CHECKINOUT):
+                CurrentMenu = MenuState.SEARCH
 
 
 #    global CheckInOutTimeoutClick
@@ -757,27 +747,41 @@ def ProcessLoginSearchWindowEvents(event):
         ProcessCursorBlinkTimerEvent()
     
 def ProcessMouseDown(event):
+
     global MouseDownPos
     global MouseClicked
-
     MouseDownPos = event.pos
     MouseClicked = True
 
+def ProcessMouseUp(event):
+    global MouseUpPos
+    global MouseReleased
+    MouseUpPos = event.pos
+    MouseReleased = True
+
 def ProcessGeneralEvents(event):
-    """Process general events like timers etc..."""
-    global running
-    if event.type == pygame.QUIT: 
-        running = False
-    elif event.type == INTERVAL_TIMER_EVENT: 
+    """
+    Process general system events like timers, mouse actions etc...
+    These events generally only need to be processed once and are
+    NOT specific to any particular window/state
+    """
+    if event.type == INTERVAL_TIMER_EVENT: 
         ProcessIntervalTimerEvent()
     elif event.type == pygame.MOUSEBUTTONDOWN: 
         #Mouse down needs to be globally monitored since it could be used on any 'screen'
+        #This event processing simply captures the mouse down position
         ProcessMouseDown(event)
+    elif event.type == pygame.MOUSEBUTTONUP: 
+        #Mouse up needs to be globally monitored since it could be used on any 'screen'
+        #This event processing simply captures the mouse up position
+        ProcessMouseUp(event)
 
 def ProcessEvents():
     """
-    Check if any events are scheduled. 
+    Check if any system events fired
+    Note: Events can be passed to multiple processors
     """
+    #Process system events
     for event in pygame.event.get(): 
         ProcessGeneralEvents(event)
         if ((CurrentMenu == MenuState.SEARCH) or (CurrentMenu == MenuState.CHECKINOUT)):
@@ -961,7 +965,7 @@ def GoogleAddLoggingMember(MemberID, Column):
             GoogleLoggingSheet.batch_update([{'range':Range, 'values':DataToWrite}])
         except gspread.exceptions.APIError as e:
             print("ERROR", e, type(e))
-            print("Critical error. Write quota exceeded again I don't know what to do now!!!")#I do eally know, but too lazy at the moment to implement!!
+            print("Critical error. Write quota exceeded again I don't know what to do now!!!")#I do really know, but too lazy at the moment to implement!!
 
 
 def GoogleCheckLoggingValid():
@@ -1084,6 +1088,9 @@ def ProcessVirtualKeyboardClick():
     global MouseClicked
     global VirtualKeyPressed
     global VirtualKeyPressedTimer
+    global InputFromKeyboardActive
+    global KeyboardEntryTimeout
+    global CurrentMenu
 
     Column = (int)((MouseDownPos[0] - KBBorder) / KBSpacing)
     Row = (int)((MouseDownPos[1] - KBBorder) / KBSpacing)
@@ -1100,77 +1107,144 @@ def ProcessVirtualKeyboardClick():
     VirtualKeyPressedTimer = 10
     MouseClicked = False
     ProcessKeyDown(Character)
+    #If actually in the checkin/out state and a key received then
+    #Revert and re-search
+    if (CurrentMenu == MenuState.CHECKINOUT):
+        InputFromKeyboardActive = True
+        KeyboardEntryTimeout = KEYBOARD_ENTRY_TIMEOUT
+        CurrentMenu = MenuState.SEARCH
+        #ToDo: Will also need to clear the auto check in/out timer here too!!!
+
+def ProcessVirtualKeyboardTimer():
+    """
+    If the virtual key highlight timer has not expired then decement
+    """
+    global VirtualKeyPressedTimer
+    global VirtualKeyPressed
+    if (VirtualKeyPressedTimer > 0):
+        VirtualKeyPressedTimer = VirtualKeyPressedTimer - 1
+        if (VirtualKeyPressedTimer == 0):
+            VirtualKeyPressed = -1
+
+def ProcessInputFromCardValid():
+    """
+    Card input has changed and is now valid
+    """
+    global UserToSearch
+    global UserToSearchChanged
+    global UnknownCardTimeout
+    global InputFromCard
+    global InputFromCardValid
+    global InputFromCardActive
+
+    #Get the corresponding user name
+    if (len(InputFromCard) == 16):
+        #IDs from the 13MHz reader are 16 character hex numberswith 8 leading '0's so remove them
+        ID = InputFromCard[-8:]
+    elif (len(InputFromCard) == 10):
+        #IDs from 125KHz keyboard reader are 10 digit decimal numbers
+        ID = InputFromCard
+    #Get the member name
+    if (ID in MemberDictionary):
+        #ID is in the list so get the name
+        Member = MemberDictionary[ID]
+        MemberName = Member["Name"]
+        UserToSearch = MemberName
+    else:
+        #Member not found so let the user know
+        MemberName = "Unknown ID " + ID
+        UserToSearch = MemberName
+        UserToSearchChanged = True
+        UnknownCardTimeout = UNKNOWN_CARD_TIMEOUT
+    #Clear the card string and flags
+    InputFromCard = ""
+    InputFromCardValid = False
+    InputFromCardActive = False
+
+def ProcessUserToSearchChanged():
+    """
+    Update the search list based on the new 'user to search' for
+    """
+    global NameTextBoxText
+    global UserToSearchChanged
+
+    NameTextBoxText = UserToSearch
+    FilterDictionary(NameTextBoxText)
+    UserToSearchChanged = False
+
+def GetCurrentUserState(Name):
+    global UserToSearch
+    global UserToSearchChanged
+    global CurrentUserStatus
+    global CurrentUserName
+    global CurrentUserID
+
+    UserToSearch = Name
+    UserToSearchChanged = True
+    CurrentUserID = NameToID[Name]
+    CurrentUserName = Name
+    CurrentUserStatusID  = MemberDictionary[CurrentUserID]["InOut"]
+    if (CurrentUserStatusID == "Out"):
+        CurrentUserStatus = UserStatus.CHECKOUT
+    elif (CurrentUserStatusID == "In"):
+        CurrentUserStatus = UserStatus.CHECKIN
+    elif (CurrentUserStatusID == "ERROR"):
+        CurrentUserStatus = UserStatus.ERROR
+    elif (CurrentUserStatusID == "DISABLED"):
+        CurrentUserStatus = UserStatus.DISABLED
+    else:
+        print("GetCurrentUserState : ERROR")
+
+def ProcessListNameClicked():
+    global CheckInOutTimeoutClick
+    global TimeoutClickActive
+    global UserToSearch
+    global UserToSearchChanged
+    global CurrentMenu
+    global KeyboardEntryTimeout
+
+    EntryHit = math.floor((MouseDownPos[1] - NameListRect[1]) / NameTextHeight)
+    if (EntryHit < len(FilteredMembersNames)):
+        #Clicked on a single entry so make it the currently selected user and prepare to check in/out
+        GetCurrentUserState(FilteredMembersNames[EntryHit])
+        CurrentMenu = MenuState.CHECKINOUT
+        CheckInOutTimeoutClick = CHECKINOUTCLICK_TIMEOUT
+        TimeoutClickActive =True
+        KeyboardEntryTimeout = 0
 
 def ProcessUpdates():
     """
     Process anything that needs updating
     e.g. If card read then convert to name and fill out the search text with the corresponding name etc...
     """
-    global NameTextBox
-    global NameTextChanged
-    global NameTextBoxText
-    global UserToSearchChanged
-    global UserToSearch
-    global InputFromCardValid
-    global InputFromCard
-    global InputFromCardActive
-    global UnknownCardTimeout
-    global VirtualKeyPressedTimer
-    global VirtualKeyPressed
-
-    if (VirtualKeyPressedTimer > 0):
-        VirtualKeyPressedTimer = VirtualKeyPressedTimer - 1
-        if (VirtualKeyPressedTimer == 0):
-            VirtualKeyPressed = -1
-
+    ProcessVirtualKeyboardTimer()
+    #If the keyboard is visible and mouse clicked in the keyboard region then process...
     if (ShowKeyboard and MouseClicked and KeyboardRect.collidepoint(MouseDownPos)):
-        #If the keyboard is visible and Mouse clicked in the keyboard region then process accordingly
         ProcessVirtualKeyboardClick()
-
+    #If on search screen and mouse clicked in the list region then process...
+    if ((CurrentMenu == MenuState.SEARCH) and MouseClicked and NameListRect.collidepoint(MouseDownPos)):
+        ProcessListNameClicked()
     if (InputFromCardValid):
-        #Card input has changed and is now valid
-        #Get the corresponding user name
-        if (len(InputFromCard) == 16):
-            #IDs from the 13MHz reader are 16 character hex numberswith 8 leading '0's so remove them
-            ID = InputFromCard[-8:]
-        elif (len(InputFromCard) == 10):
-            #IDs from 125KHz keyboard reader are 10 digit decimal numbers
-            ID = InputFromCard
-        #Get the member name
-        if (ID in MemberDictionary):
-            #ID is in the list so get the name
-            Member = MemberDictionary[ID]
-            MemberName = Member["Name"]
-            UserToSearch = MemberName
-        else:
-            #Member not found so let the user know
-            MemberName = "Unknown ID " + ID
-            UserToSearch = MemberName
-            UserToSearchChanged = True
-            UnknownCardTimeout = UNKNOWN_CARD_TIMEOUT
-        #Clear the card string and flags
-        InputFromCard = ""
-        InputFromCardValid = False
-        InputFromCardActive = False
-
-
+        ProcessInputFromCardValid()
     if (UserToSearchChanged == True):
-        MemberName = UserToSearch
-        NameTextBoxText = MemberName
-        NameTextChanged = True
-        FilterDictionary(MemberName)
-        UserToSearchChanged = False
+        ProcessUserToSearchChanged()
 
 def blit_alpha(target, source, location, opacity):
-        x = location[0]
-        y = location[1]
-        temp = pygame.Surface((source.get_width(), source.get_height())).convert()
-        temp.blit(target, (-x, -y))
-        temp.blit(source, (0, 0))
-        temp.set_alpha(opacity)        
-        target.blit(temp, location)
+    """
+    Blit one image to another with a fixed alpha value
+    """
+    x = location[0]
+    y = location[1]
+    temp = pygame.Surface((source.get_width(), source.get_height())).convert()
+    temp.blit(target, (-x, -y))
+    temp.blit(source, (0, 0))
+    temp.set_alpha(opacity)        
+    target.blit(temp, location)
 
 def RenderKeyboard():
+    """
+    Render a virtual keyboard
+    """
     Index = 0
     for y in range(6):
         BYC = KBBorder + (y * KBSpacing) + (KBSpacing / 2) # Button center Y
@@ -1205,6 +1279,9 @@ def RenderKeyboard():
             Index = Index + 1
 
 def InitVirtualKeyboard():
+    """
+    Initialize the virtual keyboard parameters
+    """
     global KeyCapImg
     global KeyCapFont
     global KBBorder
@@ -1223,6 +1300,8 @@ def InitVirtualKeyboard():
     KeyboardRect = pygame.Rect([KBBorder, KBBorder, (5 * KBSpacing), (6 * KBSpacing)])
     pygame.time.set_timer(CURSOR_BLINK_TIMER_EVENT, 500)
 
+###################################################################################################
+# Main application start
 ###################################################################################################
 
 pygame.init() 
@@ -1255,9 +1334,12 @@ InitVirtualKeyboard()
 
 running = True
   
-while running: 
+while running: #Run until stopped
     ProcessEvents()
     CheckVCOMCard()
     ProcessUpdates()
     UpdateDisplay()
+    #If nothing triggered by the mouse event then clear anyhow
+    MouseClicked = False
+    MouseReleased = False
     clock.tick(30)
