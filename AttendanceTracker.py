@@ -1290,7 +1290,7 @@ def InitVirtualKeyboard():
     global KeyCapScaledImg3x
     global KeyboardRect
 
-    KeyCapImg = pygame.image.load(CWD + "/Assets/KeyCap1.png")
+    KeyCapImg = pygame.image.load(CWD + "/Assets/KeyCap5.png")
     KeyCapFont = pygame.font.SysFont('Comic Sans MS', KBFontSize)
     KBBorder = 30
     KBSpacing = (int)(((WindowWidth / 2) - (2 * KBBorder)) / 5)
